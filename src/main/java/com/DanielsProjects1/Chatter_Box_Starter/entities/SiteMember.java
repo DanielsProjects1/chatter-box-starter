@@ -32,7 +32,7 @@ public class SiteMember {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private SiteRole role;
+    private SiteRole role = SiteRole.USER;
 
     @CreatedDate
     private Instant createdDate;

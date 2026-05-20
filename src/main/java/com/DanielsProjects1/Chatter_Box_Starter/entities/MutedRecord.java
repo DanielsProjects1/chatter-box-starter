@@ -11,34 +11,31 @@ import java.util.UUID;
 
 @Data
 @Entity
-@Table(name = "users")
+@Table(name = "muted_users")
 @EntityListeners(AuditingEntityListener.class)
-public class User {
+public class MutedRecord {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    private String username;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "muted_user_id", nullable = false)
+    private User mutedUser;
 
-    private String passHash;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "muter_id",  nullable = false)
+    private User mutedBy;
 
-    private String email;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "site_id")
+    private Site site;
 
-    private String profilePictureUrl;
+    private String reason;
 
-    private String banner;
-
-    private String displayName;
-
-    private String bio;
-
-    @Enumerated(EnumType.STRING)
-    private GlobalRole globalRole =  GlobalRole.USER;
-
-    private boolean active;
     @CreatedDate
     private Instant createdAt;
-    @LastModifiedDate
-    private Instant updatedAt;
+
+    private Instant expiresAt;
+
 }

@@ -24,7 +24,7 @@ public class Site {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
-    private User user;
+    private User owner;
 
     @CreatedDate
     private Instant createdAt;

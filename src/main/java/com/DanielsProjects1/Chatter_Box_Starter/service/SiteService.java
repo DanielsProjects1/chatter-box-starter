@@ -1,16 +1,16 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
-import com.DanielsProjects1.Chatter_Box_Starter.entities.Site;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.SiteMember;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.SiteRole;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.User;
+import com.DanielsProjects1.Chatter_Box_Starter.entities.*;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteMemberRepository;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteRepository;
+import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteRuleRepository;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.file.AccessDeniedException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,11 +20,13 @@ public class SiteService {
     private SiteRepository siteRepo;
     private UserRepository userRepo;
     private SiteMemberRepository siteMemberRepo;
+    private SiteRuleRepository siteRuleRepo;
 
-    public SiteService(SiteRepository siteRepo, UserRepository userRepo, SiteMemberRepository siteMemberRepo) {
+    public SiteService(SiteRepository siteRepo, UserRepository userRepo, SiteMemberRepository siteMemberRepo, SiteRuleRepository siteRuleRepo) {
         this.siteRepo = siteRepo;
         this.userRepo = userRepo;
         this.siteMemberRepo = siteMemberRepo;
+        this.siteRuleRepo = siteRuleRepo;
     }
 
     @Transactional
@@ -46,4 +48,96 @@ public class SiteService {
         siteMemberRepo.save(membership);
         return site;
     }
+
+    @Transactional
+    public void deactivateSite(UUID siteId, UUID ownerId) throws AccessDeniedException {
+        Site site = siteRepo.findById(siteId)
+                .orElseThrow(() -> new RuntimeException("Site not found"));
+
+        if (!site.getOwner().getId().equals(ownerId)) {
+            throw new AccessDeniedException("You do not have permission to deactivate this site.");
+        }
+        site.setActive(false);
+        siteRepo.save(site);
+    }
+
+    @Transactional
+    public void updateMemberRole(UUID siteId, UUID ownerId, UUID userId, SiteRole role) throws AccessDeniedException {
+        Site site = siteRepo.findById(siteId)
+                .orElseThrow(() -> new RuntimeException("Site not found"));
+        if (!site.getOwner().getId().equals(ownerId)) {
+            throw new AccessDeniedException("You do not have permission to update this site.");
+        }
+
+        SiteMember member = siteMemberRepo.findByUserIdAndSiteId(userId, siteId)
+                .orElseThrow(() -> new RuntimeException("No user on your website with the id: " + userId));
+
+        if (role == SiteRole.OWNER) {
+            throw new RuntimeException("You cannot assign anyone the OWNER role. There can only be one OWNER per site.");
+        }
+        member.setRole(role);
+        siteMemberRepo.save(member);
+    }
+
+    @Transactional
+    public SiteRule createSiteRule(UUID siteId, UUID ownerId, String rule) throws AccessDeniedException {
+        Site site = siteRepo.findById(siteId)
+                .orElseThrow(() -> new RuntimeException("Site not found"));
+        if (!site.getOwner().getId().equals(ownerId)) {
+            throw new AccessDeniedException("You do not have permission to update this site.");
+        }
+        SiteRule siteRule = new SiteRule();
+        siteRule.setRule(rule);
+        siteRule.setSite(site);
+
+        boolean exists = siteRuleRepo.existsBySiteIdAndRule(siteId, siteRule.getRule());
+        if (exists) {
+            throw new RuntimeException("Your site already has that rule.");
+        }
+        siteRuleRepo.save(siteRule);
+        return siteRule;
+    }
+
+    @Transactional
+    public void deleteSiteRule(UUID siteId, UUID ownerId, UUID ruleId) throws AccessDeniedException {
+        Site site = siteRepo.findById(siteId)
+                .orElseThrow(() -> new RuntimeException("Site not found"));
+        if (!site.getOwner().getId().equals(ownerId)) {
+            throw new AccessDeniedException("You do not have permission to update this site.");
+        }
+        SiteRule rule = siteRuleRepo.findByIdAndSiteId(ruleId, siteId)
+                .orElseThrow(() -> new RuntimeException("No rule on your site with the id: " + ruleId));
+        siteRuleRepo.delete(rule);
+    }
+
+    public List<Site> getSitesRegisteredByOwner(UUID userId) {
+        List<Site> sites = siteRepo.findAllByOwnerId(userId);
+        return sites;
+    }
+
+    public List<SiteRule> getSiteRules(UUID siteId) {
+        List<SiteRule> siteRules = siteRuleRepo.findAllBySiteId(siteId);
+        return siteRules;
+    }
+
+    public List<SiteMember> getSiteMembers(UUID siteId) {
+        List<SiteMember> siteMembers = siteMemberRepo.findAllBySiteId(siteId);
+        return siteMembers;
+    }
+
+    @Transactional
+    public void updateSiteDomain(UUID siteId, UUID ownerId, String newDomain) throws AccessDeniedException {
+        Site site = siteRepo.findById(siteId)
+                .orElseThrow(() -> new RuntimeException("Site not found"));
+        if (!site.getOwner().getId().equals(ownerId)) {
+            throw new AccessDeniedException("You do not have permission to update the domain of this site. Only the owner does.");
+        }
+        Optional<Site> existingSite = siteRepo.findByDomain(newDomain);
+        if (existingSite.isPresent()) {
+            throw new RuntimeException("Site already exists");
+        }
+        site.setDomain(newDomain);
+        siteRepo.save(site);
+    }
+    
 }

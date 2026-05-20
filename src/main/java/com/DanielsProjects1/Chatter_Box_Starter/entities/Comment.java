@@ -21,8 +21,8 @@ public class Comment {
     private UUID id; // Universally Unique Identifier
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "thread_id", nullable = false)
-    private Thread thread;
+    @JoinColumn(name = "box_id", nullable = false)
+    private Box box;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id", nullable = false)
@@ -38,6 +38,12 @@ public class Comment {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CommentStatus status = CommentStatus.VISIBLE;
+
+    @Column(nullable = false)
+    private boolean locked = false;
+
+    @Column(nullable = false)
+    private boolean pinned = false;
 
     @CreatedDate
     private Instant createdAt;

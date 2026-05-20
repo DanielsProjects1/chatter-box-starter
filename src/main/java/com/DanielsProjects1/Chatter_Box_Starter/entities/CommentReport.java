@@ -1,6 +1,7 @@
 package com.DanielsProjects1.Chatter_Box_Starter.entities;
 
 import jakarta.persistence.*;
+import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+@Data
 @Entity
 @Table(
         name = "comment_reports",
@@ -33,12 +35,12 @@ public class CommentReport {
     private SiteRule violatedRule;
 
     @Enumerated(EnumType.STRING)
-    private ReportReason reason =  ReportReason.OTHER;
+    private ReportReason reason = ReportReason.OTHER;
 
     private String explanation;
 
     @Enumerated(EnumType.STRING)
-    private ReportAction actionTaken =  ReportAction.PENDING;
+    private ReportAction actionTaken = ReportAction.PENDING;
 
     @CreatedDate
     private Instant createdAt;
