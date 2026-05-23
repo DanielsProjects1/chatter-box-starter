@@ -45,6 +45,7 @@ public class UserService {
         userRepo.save(user);
     }
 
+    @Transactional
     public User syncUser(UUID keycloakId, String email, String username) {
         return userRepo.findById(keycloakId)
                 .orElseGet(() -> {
@@ -53,7 +54,7 @@ public class UserService {
                     user.setEmail(email);
                     user.setUsername(username);
                     user.setDisplayName(username);
-                    return userRepo.save(user);
+                    return userRepo.saveAndFlush(user);
                 });
     }
 
