@@ -16,8 +16,8 @@ import java.util.UUID;
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    private UUID id; // GenerateValue annotation removed since Keycloak provides the ID.
+    //Basically this is telling Hibernate "the ID will always be provided externally"
 
     private String username;
 
