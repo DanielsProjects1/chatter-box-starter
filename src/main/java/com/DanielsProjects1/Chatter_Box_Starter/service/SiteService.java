@@ -39,7 +39,7 @@ public class SiteService {
         site.setDomain(domain);
         User user = userRepo.findById(ownerId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + ownerId));
-
+        site.setOwner(user);
         siteRepo.save(site);
         SiteMember membership = new SiteMember();
         membership.setSite(site);
