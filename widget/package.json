@@ -1,0 +1,16 @@
+{
+  "name": "widget",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild src/chatterbox.js --bundle --minify --outfile=dist/chatterbox.js",
+    "dev": "esbuild src/chatterbox.js --bundle --outfile=dist/chatterbox.js --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

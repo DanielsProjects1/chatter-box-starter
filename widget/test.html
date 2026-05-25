@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatterBox Test</title>
+    <style>
+        body {
+            background: #111;
+            color: #e1e1e1;
+            font-family: 'Inter', system-ui, sans-serif;
+            max-width: 800px;
+            margin: 60px auto;
+            padding: 0 24px;
+        }
+        h1 { margin-bottom: 40px; font-size: 24px; }
+    </style>
+</head>
+<body>
+    <h1>Test Blog Post</h1>
+    <p>This is a test page to see ChatterBox in action.</p>
+
+    <div id="chatterbox-widget"></div>
+
+    <script>
+        window.ChatterBoxConfig = {
+            siteId: "PASTE_YOUR_SITE_ID_HERE"
+        };
+    </script>
+    <script src="dist/chatterbox.js"></script>
+</body>
+</html>
