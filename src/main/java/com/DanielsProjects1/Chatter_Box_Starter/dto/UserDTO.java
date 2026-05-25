@@ -1,9 +1,11 @@
 package com.DanielsProjects1.Chatter_Box_Starter.dto;
 
 import com.DanielsProjects1.Chatter_Box_Starter.entities.User;
+import lombok.Data;
 
 import java.util.UUID;
 
+@Data
 public class UserDTO {
     private UUID userId;
     private String username;

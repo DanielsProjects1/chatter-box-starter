@@ -3,10 +3,12 @@ package com.DanielsProjects1.Chatter_Box_Starter.dto;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Comment;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentStatus;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.User;
+import lombok.Data;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Data
 public class CommentDTO {
     private UUID id;
     private String body;

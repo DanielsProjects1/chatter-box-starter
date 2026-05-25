@@ -1,9 +1,10 @@
 package com.DanielsProjects1.Chatter_Box_Starter.dto;
 
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Site;
+import lombok.Data;
 
 import java.util.UUID;
-
+@Data
 public class SiteDTO {
     private UUID id;
     private String domain;
