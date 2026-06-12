@@ -2,6 +2,7 @@ package com.DanielsProjects1.Chatter_Box_Starter.service;
 
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentReportDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.dto.ReactionDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.*;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.*;
 import org.springframework.data.domain.Page;
@@ -13,9 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.AccessDeniedException;
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class CommentService {
@@ -28,8 +28,9 @@ public class CommentService {
     private CommentReportRepository commentReportRepo;
     private SiteRuleRepository siteRuleRepo;
     private MutedRecordRepository mutedRecordRepo;
+    private ReactionRepository reactionRepo;
 
-    public CommentService(CommentRepository commentRepo, BoxRepository boxRepo, UserRepository userRepo, SiteMemberRepository siteMemberRepo, SiteRepository siteRepo, CommentReportRepository commentReportRepo, SiteRuleRepository siteRuleRepo, MutedRecordRepository mutedRecordRepo) {
+    public CommentService(CommentRepository commentRepo, BoxRepository boxRepo, UserRepository userRepo, SiteMemberRepository siteMemberRepo, SiteRepository siteRepo, CommentReportRepository commentReportRepo, SiteRuleRepository siteRuleRepo, MutedRecordRepository mutedRecordRepo, ReactionRepository reactionRepo) {
         this.commentRepo = commentRepo;
         this.boxRepo = boxRepo;
         this.userRepo = userRepo;
@@ -38,6 +39,7 @@ public class CommentService {
         this.commentReportRepo = commentReportRepo;
         this.siteRuleRepo = siteRuleRepo;
         this.mutedRecordRepo = mutedRecordRepo;
+        this.reactionRepo = reactionRepo;
     }
 
     @Transactional
@@ -141,7 +143,7 @@ public class CommentService {
         return report;
     }
 
-    public Page<CommentDTO> getCommentsByBox(UUID boxId, int page, int size) {
+    public Page<CommentDTO> getCommentsByBox(UUID boxId, int page, int size, UUID userId) {
         Box box = boxRepo.findById(boxId).orElseThrow(() -> new RuntimeException("Box not found."));
         if (!box.isActive()) {
             throw new RuntimeException("This box no longer exists");
@@ -154,11 +156,12 @@ public class CommentService {
         return commentRepo.findAllByBoxIdAndParentIsNull(boxId, pageable)
                 .map(comment -> {
                     long replyCount = commentRepo.countByParentId(comment.getId());
-                    return CommentDTO.from(comment, replyCount);
+                    List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId);
+                    return CommentDTO.from(comment, replyCount, reactions);
                 });
     }
 
-    public Page<CommentDTO> getRepliesByComment(UUID parentId, int page, int size) {
+    public Page<CommentDTO> getRepliesByComment(UUID parentId, int page, int size, UUID userId) {
         // Fetching the parent comment here only serves as validating its existence.
         Comment parent = commentRepo.findById(parentId).orElseThrow(() -> new RuntimeException("The parent comment does not exist."));
         Sort sort = Sort.by(
@@ -169,7 +172,8 @@ public class CommentService {
         return commentRepo.findByParentId(parentId, pageable)
                 .map(comment -> {
                     long replyCount = commentRepo.countByParentId(comment.getId());
-                    return CommentDTO.from(comment, replyCount);
+                    List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId);
+                    return CommentDTO.from(comment, replyCount, reactions);
                 });
     }
 
@@ -260,4 +264,21 @@ public class CommentService {
         MutedRecord record = mutedRecordRepo.findByMutedUserIdAndSiteId(userId, siteId).orElseThrow(() -> new RuntimeException("No user by that id to unmute on this site."));
         mutedRecordRepo.delete(record);
     }
+
+    private List<ReactionDTO> buildReactionDTOs(UUID commentId, UUID userId) {
+        List<Object[]> counts = reactionRepo.countReactionsForComment(commentId);
+        Set<ReactionType> userReactions = userId != null
+                ? new HashSet<>(reactionRepo.findReactionTypesByCommentIdAndUserId(commentId, userId))
+                : Collections.emptySet();
+        return counts.stream().map(reaction -> {
+            ReactionType emoji = (ReactionType) reaction[0];
+            long count = (Long) reaction[1];
+            ReactionDTO dto = new ReactionDTO();
+            dto.setReactionType(emoji);
+            dto.setCount(count);
+            dto.setReacted(userReactions.contains(emoji));
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
 }

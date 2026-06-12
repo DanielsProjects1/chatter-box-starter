@@ -6,6 +6,7 @@ import com.DanielsProjects1.Chatter_Box_Starter.entities.User;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -16,9 +17,10 @@ public class CommentDTO {
     private UUID parentId;
     private Instant createdDate;
     private CommentStatus status;
+    private List<ReactionDTO> reactions;
     private long replyCount;
 
-    public static CommentDTO from(Comment comment, long replyCount) {
+    public static CommentDTO from(Comment comment, long replyCount, List<ReactionDTO> reactions) {
         CommentDTO dto = new CommentDTO();
         dto.id = comment.getId();
         dto.body = comment.getBody();
@@ -26,6 +28,7 @@ public class CommentDTO {
         dto.parentId = comment.getParent() != null ? comment.getParent().getId() : null;
         dto.createdDate = comment.getCreatedAt();
         dto.status = comment.getStatus();
+        dto.reactions = reactions;
         dto.replyCount = replyCount;
         return dto;
     }

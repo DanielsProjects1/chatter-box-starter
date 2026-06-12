@@ -75,7 +75,7 @@ public class SiteDashboardController {
             @RequestBody CreateSiteRule newRule,
            Authentication authentication
     ) throws AccessDeniedException {
-        SiteRule rule = siteService.createSiteRule(siteId, SecurityUtils.getUserId(authentication), newRule.getRule());
+        SiteRule rule = siteService.createSiteRule(siteId, SecurityUtils.getUserId(authentication), newRule.getRule(), newRule.getDescription());
         return ResponseEntity.status(201).body(SiteRuleDTO.from(rule));
     }
 

@@ -80,20 +80,20 @@ public class SiteService {
     }
 
     @Transactional
-    public SiteRule createSiteRule(UUID siteId, UUID ownerId, String rule) throws AccessDeniedException {
+    public SiteRule createSiteRule(UUID siteId, UUID ownerId, String rule, String description) throws AccessDeniedException {
         Site site = siteRepo.findById(siteId)
                 .orElseThrow(() -> new RuntimeException("Site not found"));
         if (!site.getOwner().getId().equals(ownerId)) {
             throw new AccessDeniedException("You do not have permission to update this site.");
         }
-        SiteRule siteRule = new SiteRule();
-        siteRule.setRule(rule);
-        siteRule.setSite(site);
-
-        boolean exists = siteRuleRepo.existsBySiteIdAndRule(siteId, siteRule.getRule());
+        boolean exists = siteRuleRepo.existsBySiteIdAndRule(siteId, rule);
         if (exists) {
             throw new RuntimeException("Your site already has that rule.");
         }
+        SiteRule siteRule = new SiteRule();
+        siteRule.setRule(rule);
+        siteRule.setSite(site);
+        siteRule.setDescription(description);
         siteRuleRepo.save(siteRule);
         return siteRule;
     }

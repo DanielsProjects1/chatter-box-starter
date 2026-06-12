@@ -1,17 +1,16 @@
 package com.DanielsProjects1.Chatter_Box_Starter.controller;
 
-import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.AddComment;
-import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.EditComment;
-import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.InitBoxRequest;
-import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.ReportComment;
+import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.*;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentReportDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.dto.ReactionDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Box;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Comment;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentReport;
 import com.DanielsProjects1.Chatter_Box_Starter.service.BoxService;
 import com.DanielsProjects1.Chatter_Box_Starter.service.CommentService;
+import com.DanielsProjects1.Chatter_Box_Starter.service.ReactionService;
 import com.DanielsProjects1.Chatter_Box_Starter.utils.SecurityUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -20,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.file.AccessDeniedException;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,10 +29,12 @@ public class WidgetController {
 
     private BoxService boxService;
     private CommentService commentService;
+    private ReactionService reactionService;
 
-    public WidgetController(BoxService boxService, CommentService commentService) {
+    public WidgetController(BoxService boxService, CommentService commentService, ReactionService reactionService) {
         this.boxService = boxService;
         this.commentService = commentService;
+        this.reactionService = reactionService;
     }
 
     @PostMapping("/init")
@@ -45,18 +47,22 @@ public class WidgetController {
     public ResponseEntity<Page<CommentDTO>> getChatterForBox(
             @PathVariable UUID boxId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(commentService.getCommentsByBox(boxId, page, size));
+        UUID userId = authentication != null ? SecurityUtils.getUserId(authentication) : null;
+        return ResponseEntity.ok(commentService.getCommentsByBox(boxId, page, size, userId));
     }
 
     @GetMapping("/{boxId}/comments/{commentId}")
     public ResponseEntity<Page<CommentDTO>> getChatterForComment(
             @PathVariable UUID commentId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(commentService.getRepliesByComment(commentId, page, size));
+        UUID userId = authentication != null ? SecurityUtils.getUserId(authentication) : null;
+        return ResponseEntity.ok(commentService.getRepliesByComment(commentId, page, size, userId));
     }
 
     @PostMapping("/{boxId}/comments")
@@ -66,7 +72,7 @@ public class WidgetController {
             Authentication authentication
     ) {
         Comment comment = commentService.addComment(addComment.getBody(), SecurityUtils.getUserId(authentication), addComment.getParentId(), boxId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(CommentDTO.from(comment, 0));
+        return ResponseEntity.status(HttpStatus.CREATED).body(CommentDTO.from(comment, 0, Collections.emptyList()));
     }
 
     @DeleteMapping("/{boxId}/comments/{commentId}")
@@ -98,4 +104,13 @@ public class WidgetController {
         return ResponseEntity.ok(CommentReportDTO.from(report));
     }
 
+    @PostMapping("/comments/{commentId}/reactions")
+    public ResponseEntity<Void> toggleReaction(
+            @PathVariable UUID commentId,
+            @RequestBody ToggleReactionRequest toggleReactionRequest,
+            Authentication authentication
+    ) {
+        reactionService.toggleReaction(commentId, SecurityUtils.getUserId(authentication), toggleReactionRequest.getReactionType());
+        return ResponseEntity.noContent().build();
+    }
 }
