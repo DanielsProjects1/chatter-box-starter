@@ -2,7 +2,6 @@ package com.DanielsProjects1.Chatter_Box_Starter.dto;
 
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Comment;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentStatus;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.User;
 import lombok.Data;
 
 import java.time.Instant;
@@ -18,9 +17,10 @@ public class CommentDTO {
     private Instant createdDate;
     private CommentStatus status;
     private List<ReactionDTO> reactions;
+    private CommentPermissions permissions;
     private long replyCount;
 
-    public static CommentDTO from(Comment comment, long replyCount, List<ReactionDTO> reactions) {
+    public static CommentDTO from(Comment comment, long replyCount, List<ReactionDTO> reactions, CommentPermissions permissions) {
         CommentDTO dto = new CommentDTO();
         dto.id = comment.getId();
         dto.body = comment.getBody();
@@ -29,6 +29,7 @@ public class CommentDTO {
         dto.createdDate = comment.getCreatedAt();
         dto.status = comment.getStatus();
         dto.reactions = reactions;
+        dto.permissions = permissions;
         dto.replyCount = replyCount;
         return dto;
     }

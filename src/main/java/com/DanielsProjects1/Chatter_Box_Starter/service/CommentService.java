@@ -1,6 +1,7 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentPermissions;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentReportDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.ReactionDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.*;
@@ -43,7 +44,7 @@ public class CommentService {
     }
 
     @Transactional
-    public Comment addComment(String body, UUID userId, UUID parentCommentId, UUID boxId) {
+    public CommentDTO addComment(String body, UUID userId, UUID parentCommentId, UUID boxId) {
         Box box = boxRepo.findById(boxId).orElseThrow(() -> new RuntimeException("No box found for this comment."));
         if (box.isLocked()) {
             throw new RuntimeException("This box has been closed. You can not add any comments to it");
@@ -76,7 +77,13 @@ public class CommentService {
         comment.setAuthor(author);
         comment.setParent(parent);
         commentRepo.save(comment);
-        return comment;
+        CommentPermissions permissions = new CommentPermissions();
+        permissions.setCanEdit(true);
+        permissions.setCanReply(true);
+        permissions.setCanDelete(true);
+        permissions.setCanReact(true);
+        permissions.setCanReport(false);
+        return CommentDTO.from(comment, 0, Collections.emptyList(), permissions);
     }
 
     @Transactional
@@ -148,6 +155,10 @@ public class CommentService {
         if (!box.isActive()) {
             throw new RuntimeException("This box no longer exists");
         }
+        UUID siteId = box.getSite().getId();
+        SiteMember member = userId != null ? siteMemberRepo.findByUserIdAndSiteId(siteId, siteId).orElse(null) : null;
+        boolean isMuted = userId != null && mutedRecordRepo.isUserMuted(userId, siteId, Instant.now());
+
         Sort sort = Sort.by(
                 Sort.Order.desc("pinned"),
                 Sort.Order.asc("createdAt")
@@ -157,13 +168,18 @@ public class CommentService {
                 .map(comment -> {
                     long replyCount = commentRepo.countByParentId(comment.getId());
                     List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId);
-                    return CommentDTO.from(comment, replyCount, reactions);
+                    CommentPermissions permissions = buildPermissions(comment, userId, box, member, isMuted);
+                    return CommentDTO.from(comment, replyCount, reactions, permissions);
                 });
     }
 
     public Page<CommentDTO> getRepliesByComment(UUID parentId, int page, int size, UUID userId) {
         // Fetching the parent comment here only serves as validating its existence.
         Comment parent = commentRepo.findById(parentId).orElseThrow(() -> new RuntimeException("The parent comment does not exist."));
+        Box box = parent.getBox();
+        UUID siteId = box.getSite().getId();
+        SiteMember member = userId != null ? siteMemberRepo.findByUserIdAndSiteId(userId, siteId).orElse(null) : null;
+        boolean isMuted = userId != null && mutedRecordRepo.isUserMuted(userId, siteId, Instant.now());
         Sort sort = Sort.by(
                 Sort.Order.desc("pinned"),
                 Sort.Order.asc("createdAt")
@@ -173,7 +189,8 @@ public class CommentService {
                 .map(comment -> {
                     long replyCount = commentRepo.countByParentId(comment.getId());
                     List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId);
-                    return CommentDTO.from(comment, replyCount, reactions);
+                    CommentPermissions permissions = buildPermissions(comment, userId, box, member, isMuted);
+                    return CommentDTO.from(comment, replyCount, reactions, permissions);
                 });
     }
 
@@ -279,6 +296,21 @@ public class CommentService {
             dto.setReacted(userReactions.contains(emoji));
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    private CommentPermissions buildPermissions(Comment comment, UUID userId, Box box, SiteMember member, boolean isMuted) {
+        boolean canReply = !box.isLocked() && !comment.isLocked() && !isMuted;
+        boolean canReact = canReply;
+        boolean isAuthor = comment.getAuthor().getId().equals(userId);
+        boolean canReport = member != null && member.getRole() == SiteRole.USER && !isAuthor;
+        boolean canDelete = member != null && (comment.getAuthor().getId().equals(member.getUser().getId()) || member.getRole().ordinal() > SiteRole.USER.ordinal());
+        CommentPermissions permissions = new CommentPermissions();
+        permissions.setCanEdit(isAuthor);
+        permissions.setCanDelete(canDelete);
+        permissions.setCanReact(canReact);
+        permissions.setCanReport(canReport);
+        permissions.setCanReply(canReply);
+        return permissions;
     }
 
 }

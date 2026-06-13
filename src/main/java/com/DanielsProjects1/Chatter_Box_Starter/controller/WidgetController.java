@@ -71,8 +71,8 @@ public class WidgetController {
             @RequestBody AddComment addComment,
             Authentication authentication
     ) {
-        Comment comment = commentService.addComment(addComment.getBody(), SecurityUtils.getUserId(authentication), addComment.getParentId(), boxId);
-        return ResponseEntity.status(HttpStatus.CREATED).body(CommentDTO.from(comment, 0, Collections.emptyList()));
+        CommentDTO comment = commentService.addComment(addComment.getBody(), SecurityUtils.getUserId(authentication), addComment.getParentId(), boxId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(comment);
     }
 
     @DeleteMapping("/{boxId}/comments/{commentId}")
