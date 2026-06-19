@@ -156,7 +156,7 @@ public class CommentService {
             throw new RuntimeException("This box no longer exists");
         }
         UUID siteId = box.getSite().getId();
-        SiteMember member = userId != null ? siteMemberRepo.findByUserIdAndSiteId(siteId, siteId).orElse(null) : null;
+        SiteMember member = userId != null ? siteMemberRepo.findByUserIdAndSiteId(userId, siteId).orElse(null) : null;
         boolean isMuted = userId != null && mutedRecordRepo.isUserMuted(userId, siteId, Instant.now());
 
         Sort sort = Sort.by(
@@ -164,11 +164,42 @@ public class CommentService {
                 Sort.Order.asc("createdAt")
         );
         Pageable pageable = PageRequest.of(page, size, sort);
-        return commentRepo.findAllByBoxIdAndParentIsNull(boxId, pageable)
-                .map(comment -> {
-                    long replyCount = commentRepo.countByParentId(comment.getId());
-                    List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId);
-                    CommentPermissions permissions = buildPermissions(comment, userId, box, member, isMuted);
+        Page<Comment> comments = commentRepo.findAllByBoxIdAndParentIsNull(boxId, pageable);
+        List<UUID> authorIds = comments.getContent().stream()
+                .map(c -> c.getAuthor().getId())
+                .distinct()
+                .collect(Collectors.toList());
+        Map<UUID, SiteMember> authorMemberships = authorIds.isEmpty() ? Collections.emptyMap() :
+                siteMemberRepo.findBySiteIdAndUserIdIn(siteId, authorIds)
+                        .stream()
+                        .collect(Collectors.toMap(siteMember -> siteMember.getUser().getId(), siteMember -> siteMember));
+
+        List<UUID> commentIds = comments.getContent().stream()
+                .map(Comment::getId)
+                .collect(Collectors.toList());
+
+        // stream the list of objects containing commentId, reactionType, count of that type and
+        // store in a map grouping them by commentId
+        Map<UUID, List<Object[]>> allCounts = reactionRepo.countReactionsByCommentIds(commentIds)
+                .stream()
+                .collect(Collectors.groupingBy(row -> (UUID) row[0]));
+
+        Set<String> userReactionKeys = userId != null
+                ? reactionRepo.findUserReactionsByCommentIds(commentIds, userId)
+                    .stream()
+                    .map(row -> row[0] + ":" + row[1]) // commentId:reactionType
+                    .collect(Collectors.toSet())
+                : Collections.emptySet();
+
+        Map<UUID, Long> replyCounts = commentRepo.countRepliesByParentIds(commentIds)
+                .stream()
+                .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
+
+        return comments.map(comment -> {
+                    long replyCount = replyCounts.getOrDefault(comment.getId(), 0L);
+                    List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId, allCounts, userReactionKeys);
+                    SiteMember authorMember = authorMemberships.get(comment.getAuthor().getId());
+                    CommentPermissions permissions = buildPermissions(comment, userId, box, member, isMuted, authorMember);
                     return CommentDTO.from(comment, replyCount, reactions, permissions);
                 });
     }
@@ -185,11 +216,40 @@ public class CommentService {
                 Sort.Order.asc("createdAt")
         );
         Pageable pageable = PageRequest.of(page, size, sort);
-        return commentRepo.findByParentId(parentId, pageable)
-                .map(comment -> {
-                    long replyCount = commentRepo.countByParentId(comment.getId());
-                    List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId);
-                    CommentPermissions permissions = buildPermissions(comment, userId, box, member, isMuted);
+        Page<Comment> comments = commentRepo.findByParentId(parentId, pageable);
+        List<UUID> authorIds = comments.getContent().stream()
+                .map(c -> c.getAuthor().getId())
+                .distinct()
+                .collect(Collectors.toList());
+        Map<UUID, SiteMember> authorMemberships = authorIds.isEmpty() ? Collections.emptyMap() :
+                siteMemberRepo.findBySiteIdAndUserIdIn(siteId, authorIds)
+                        .stream()
+                        .collect(Collectors.toMap(siteMember -> siteMember.getUser().getId(), siteMember -> siteMember));
+
+        List<UUID> commentIds = comments.getContent().stream()
+                .map(Comment::getId)
+                .collect(Collectors.toList());
+
+        Map<UUID, List<Object[]>> allCounts = reactionRepo.countReactionsByCommentIds(commentIds)
+                .stream()
+                .collect(Collectors.groupingBy(row -> (UUID) row[0]));
+
+        Set<String> userReactionKeys = userId != null
+                ? reactionRepo.findUserReactionsByCommentIds(commentIds, userId)
+                    .stream()
+                    .map(row -> row[0] + ":" + row[1])
+                    .collect(Collectors.toSet())
+                : Collections.emptySet();
+
+        Map<UUID, Long> replyCounts = commentRepo.countRepliesByParentIds(commentIds)
+                .stream()
+                .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1]));
+
+        return comments.map(comment -> {
+                    long replyCount = replyCounts.getOrDefault(comment.getId(), 0L);
+                    List<ReactionDTO> reactions = buildReactionDTOs(comment.getId(), userId, allCounts, userReactionKeys);
+                    SiteMember authorMember = authorMemberships.get(comment.getAuthor().getId());
+                    CommentPermissions permissions = buildPermissions(comment, userId, box, member, isMuted, authorMember);
                     return CommentDTO.from(comment, replyCount, reactions, permissions);
                 });
     }
@@ -282,34 +342,38 @@ public class CommentService {
         mutedRecordRepo.delete(record);
     }
 
-    private List<ReactionDTO> buildReactionDTOs(UUID commentId, UUID userId) {
-        List<Object[]> counts = reactionRepo.countReactionsForComment(commentId);
-        Set<ReactionType> userReactions = userId != null
-                ? new HashSet<>(reactionRepo.findReactionTypesByCommentIdAndUserId(commentId, userId))
-                : Collections.emptySet();
+    private List<ReactionDTO> buildReactionDTOs(UUID commentId, UUID userId, Map<UUID, List<Object[]>> allCounts, Set<String> userReactionKeys) {
+        List<Object[]> counts = allCounts.getOrDefault(commentId, Collections.emptyList());
         return counts.stream().map(reaction -> {
-            ReactionType emoji = (ReactionType) reaction[0];
-            long count = (Long) reaction[1];
+            ReactionType emoji = (ReactionType) reaction[1];
+            long count = (Long) reaction[2];
             ReactionDTO dto = new ReactionDTO();
             dto.setReactionType(emoji);
             dto.setCount(count);
-            dto.setReacted(userReactions.contains(emoji));
+            dto.setReacted(userReactionKeys.contains(commentId + ":" + emoji));
             return dto;
         }).collect(Collectors.toList());
     }
 
-    private CommentPermissions buildPermissions(Comment comment, UUID userId, Box box, SiteMember member, boolean isMuted) {
+    private CommentPermissions buildPermissions(Comment comment, UUID userId, Box box, SiteMember member, boolean isMuted, SiteMember authorMember) {
         boolean canReply = !box.isLocked() && !comment.isLocked() && !isMuted;
         boolean canReact = canReply;
         boolean isAuthor = comment.getAuthor().getId().equals(userId);
+        boolean isModerator = member != null && member.getRole() == SiteRole.MODERATOR;
+        boolean isOwner = box.getSite().getOwner().getId().equals(userId);
+        boolean authorIsMod = authorMember != null && authorMember.getRole() == SiteRole.MODERATOR;
+        boolean authorIsOwner = authorMember != null && authorMember.getUser().getId().equals(box.getSite().getOwner().getId());
         boolean canReport = member != null && member.getRole() == SiteRole.USER && !isAuthor;
-        boolean canDelete = member != null && (comment.getAuthor().getId().equals(member.getUser().getId()) || member.getRole().ordinal() > SiteRole.USER.ordinal());
+        boolean canDelete = member != null && (comment.getAuthor().getId().equals(userId) || member.getRole().ordinal() > SiteRole.USER.ordinal());
         CommentPermissions permissions = new CommentPermissions();
         permissions.setCanEdit(isAuthor);
         permissions.setCanDelete(canDelete);
         permissions.setCanReact(canReact);
         permissions.setCanReport(canReport);
         permissions.setCanReply(canReply);
+        permissions.setCanMuteAuthor((isModerator || isOwner) && !isAuthor && !authorIsMod && !authorIsOwner);
+        permissions.setCanLock(isModerator || isOwner);
+        permissions.setCanPin(isModerator || isOwner);
         return permissions;
     }
 

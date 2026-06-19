@@ -11,4 +11,5 @@ public interface SiteMemberRepository extends JpaRepository<SiteMember, UUID> {
     Optional<SiteMember> findByUserIdAndSiteId(UUID userId, UUID siteId);
     List<SiteMember> findAllBySiteId(UUID siteId);
     boolean existsByUserIdAndSiteId(UUID userId, UUID siteId);
+    List<SiteMember> findBySiteIdAndUserIdIn(UUID siteId, List<UUID> userIds);
 }

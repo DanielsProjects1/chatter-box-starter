@@ -18,4 +18,9 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     List<Object[]> countReactionsForComment(@Param("commentId") UUID commentId);
     @Query("SELECT r.reactionType FROM Reaction r WHERE r.comment.id = :commentId AND r.user.id = :userId")
     List<ReactionType> findReactionTypesByCommentIdAndUserId(@Param("commentId") UUID commentId, @Param("userId") UUID userId);
+
+    @Query("SELECT r.comment.id, r.reactionType, COUNT(r) FROM Reaction r WHERE r.comment.id IN :commentIds GROUP BY r.comment.id, r.reactionType")
+    List<Object[]> countReactionsByCommentIds(@Param("commentIds") List<UUID> commentIds);
+    @Query("SELECT r.comment.id, r.reactionType FROM Reaction r WHERE r.comment.id IN :commentIds AND r.user.id = :userId")
+    List<Object[]> findUserReactionsByCommentIds(@Param("commentIds") List<UUID> commentIds, @Param("userId") UUID userId);
 }

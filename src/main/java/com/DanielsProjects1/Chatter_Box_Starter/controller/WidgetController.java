@@ -38,9 +38,13 @@ public class WidgetController {
     }
 
     @PostMapping("/init")
-    public ResponseEntity<BoxDTO> initBox(@RequestBody InitBoxRequest request) {
-        Box box = boxService.createBox(request.getSiteId(), request.getPageUrl());
-        return ResponseEntity.status(HttpStatus.CREATED).body(BoxDTO.from(box));
+    public ResponseEntity<BoxDTO> initBox(
+            @RequestBody InitBoxRequest request,
+            Authentication authentication
+    ) {
+        UUID userId = authentication != null ? SecurityUtils.getUserId(authentication) : null;
+        BoxDTO box = boxService.getBox(request.getSiteId(), request.getPageUrl(), userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(box);
     }
 
     @GetMapping("/{boxId}/comments")

@@ -106,7 +106,7 @@ public class DashboardModerationController {
             @PathVariable UUID boxId,
             Authentication authentication
     ) throws AccessDeniedException {
-        boxService.deactivateBox(boxId, SecurityUtils.getUserId(authentication));
+        boxService.toggleBox(boxId, SecurityUtils.getUserId(authentication));
         return ResponseEntity.noContent().build();
     }
 

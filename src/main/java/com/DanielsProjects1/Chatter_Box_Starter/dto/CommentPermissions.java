@@ -9,4 +9,7 @@ public class CommentPermissions {
     private boolean canReport;
     private boolean canReact;
     private boolean canReply;
+    private boolean canMuteAuthor;
+    private boolean canLock;
+    private boolean canPin;
 }
