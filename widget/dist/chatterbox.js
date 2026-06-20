@@ -1,4 +1,4 @@
-(()=>{function st(c){let u=c.querySelector(".cb-auth-modal");u.innerHTML=`
+(()=>{function Ae(c){let m=c.querySelector(".cb-auth-modal");m.innerHTML=`
     <button class="cb-auth-close">\xD7</button>
 
     <h3>Log in</h3>
@@ -35,7 +35,7 @@
       </button>
     </p>
     <div class="cb-auth-error" id="cb-auth-error"></div>
-  `}function lt(c){let u=c.querySelector(".cb-auth-modal");u.innerHTML=`
+  `}function ze(c){let m=c.querySelector(".cb-auth-modal");m.innerHTML=`
     <button class="cb-auth-close">\xD7</button>
 
     <h3>Create account</h3>
@@ -69,26 +69,22 @@
         Log in
       </button>
     </p>
-  `}function dt(c,u={}){return`
+  `}function He(c,m={}){return`
     <div
       class="cb-comment-menu"
       data-comment-id="${c}"
     >
-      <button
-        class="cb-menu-item cb-report-comment"
-        data-comment-id="${c}"
-      >
-        Report
-      </button>
 
-      <button
-        class="cb-menu-item cb-copy-comment-link"
-        data-comment-id="${c}"
-      >
-        Copy link
-      </button>
+      ${m.canEdit?`
+        <button
+          class="cb-menu-item cb-edit-comment"
+          data-comment-id="${c}"
+        >
+          Edit
+        </button>
+      `:""}
 
-      ${u.canDelete?`
+      ${m.canDelete?`
         <button
           class="cb-menu-item cb-delete-comment"
           data-comment-id="${c}"
@@ -97,35 +93,96 @@
         </button>
       `:""}
 
-      ${u.canLock?`
+      ${m.canReport?`
         <button
-          class="cb-menu-item cb-lock-comment"
+          class="cb-menu-item cb-report-comment"
           data-comment-id="${c}"
         >
-          Lock Comment
+          Report
         </button>
       `:""}
 
-      ${u.canMute?`
-        <button
-          class="cb-menu-item cb-mute-user"
-          data-comment-id="${c}"
-        >
-          Mute User
-        </button>
-      `:""}
+      <button
+        class="cb-menu-item cb-copy-comment-link"
+        data-comment-id="${c}"
+      >
+        Copy link
+      </button>
 
-      ${u.canPin?`
+    </div>
+  `}function qe(c){let m=c.permissions||{};return`
+    <div
+      class="cb-mod-menu"
+      data-comment-id="${c.id}"
+    >
+      ${m.canPin?`
         <button
           class="cb-menu-item cb-pin-comment"
-          data-comment-id="${c}"
+          data-comment-id="${c.id}"
         >
-          Pin Comment
+          ${c.pinned?"Unpin comment":"Pin comment"}
+        </button>
+      `:""}
+
+      ${m.canLock?`
+        <button
+          class="cb-menu-item cb-lock-comment"
+          data-comment-id="${c.id}"
+        >
+          ${c.locked?"Unlock comment":"Lock comment"}
+        </button>
+      `:""}
+
+      ${m.canMuteAuthor?`
+        <button
+          class="cb-menu-item cb-mute-user"
+          data-comment-id="${c.id}"
+          data-user-id="${c.author.id}"
+        >
+          Mute author
+        </button>
+      `:""}
+
+      ${m.canDelete?`
+        <button
+          class="cb-menu-item cb-danger-item cb-mod-delete-comment"
+          data-comment-id="${c.id}"
+        >
+          Delete comment
         </button>
       `:""}
     </div>
-  `}(function(){let c="http://127.0.0.1:8081",u=["\u{1F44D}","\u2764\uFE0F","\u{1F525}","\u{1F602}"],l=window.ChatterBoxConfig||{},$=null,C=new Map,D=Promise.resolve(),z=localStorage.getItem("chatterbox_token"),pt=Number(localStorage.getItem("chatterbox_last_active")||0),bt=1e3*60*60*24*7;z&&Date.now()-pt<bt?(l.token=z,P(z)&&(D=et().then(t=>(t||B(),t)))):B();let j=l.siteId;if(!j){console.error("[ChatterBox] No siteId provided in window.ChatterBoxConfig");return}let U=l.mountId||"chatterbox-widget",J=document.getElementById(U);if(!J){console.error(`[ChatterBox] No element found with id "${U}"`);return}let n=J.attachShadow({mode:"open"}),f=null,T=0,h=[],E=!1,$t=[];async function ut(){let t=window.location.pathname;try{let o=await(await fetch(`${c}/api/v1/widget/init`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({siteId:j,pageUrl:t})})).json();mt(o)}catch(e){b("Failed to initialize comments. Please refresh the page."),console.error("[ChatterBox] Failed to initialize:",e)}}function mt(t){n.innerHTML=`
-      <style>${wt()}</style>
+  `}function ae(c){let m=c.permissions||{};return m.canShutBox||m.canDeactivateBox||m.canEmptyBox?`
+    <div class="cb-box-mod-actions">
+      ${m.canShutBox?`
+        <button
+          class="cb-box-mod-action"
+          data-box-action="${c.locked?"open":"shut"}"
+        >
+          ${c.locked?"Open Box":"Shut Box"}
+        </button>
+      `:""}
+
+      ${m.canDeactivateBox?`
+        <button
+          class="cb-box-mod-action cb-danger-item"
+          data-box-action="deactivate"
+        >
+          ${c.active?"Deactivate Box":"Reactivate Box"}
+        </button>
+      `:""}
+
+      ${m.canEmptyBox?`
+        <button
+          class="cb-box-mod-action cb-danger-item"
+          data-box-action="empty"
+        >
+          Empty Box
+        </button>
+      `:""}
+    </div>
+  `:""}(function(){let c="http://127.0.0.1:8081",m={HEART:"\u2764\uFE0F",THUMBS_UP:"\u{1F44D}",THUMBS_DOWN:"\u{1F44E}",LAUGH:"\u{1F602}",SURPRISED:"\u{1F62E}",SAD:"\u{1F622}",FIRE:"\u{1F525}"},ie=["THUMBS_UP","HEART","FIRE","LAUGH","SURPRISED","SAD","THUMBS_DOWN"],h=window.ChatterBoxConfig||{},q=null,T=new Map,ce=Promise.resolve(),Y=localStorage.getItem("chatterbox_token"),Pe=Number(localStorage.getItem("chatterbox_last_active")||0),je=1e3*60*60*24*7;Y&&Date.now()-Pe<je?(h.token=Y,$e(Y)&&(ce=Q().then(e=>(e||A(),e)))):A();let M=h.siteId;if(!M){console.error("[ChatterBox] No siteId provided in window.ChatterBoxConfig");return}let se=h.mountId||"chatterbox-widget",de=document.getElementById(se);if(!de){console.error(`[ChatterBox] No element found with id "${se}"`);return}let n=de.attachShadow({mode:"open"}),w=null,u=null,I=0,le=!1,D=0,y=[],F=!1,G=[],P=new Map;async function _e(){let e=window.location.pathname;try{let o=await(await fetch(`${c}/api/v1/widget/init`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({siteId:M,pageUrl:e})})).json();De(o)}catch(t){d("Failed to initialize comments. Please refresh the page."),console.error("[ChatterBox] Failed to initialize:",t)}}function De(e){n.innerHTML=`
+      <style>${We()}</style>
       <div class="cb-root">
         <div class="cb-tabs">
           <button class="cb-tab cb-tab-active" data-tab="comments">
@@ -138,6 +195,7 @@
         
         <div class="cb-header">
           <span class="cb-title">Chatter</span>
+          ${ae(e)}
         </div>
         <div id="cb-comments-panel">
           <div class="cb-composer">
@@ -167,62 +225,70 @@
           </div>
         </div>
       </div>
-    `,f=t.id,ft(),gt(),Y(f)}async function Y(t){try{let o=await(await fetch(`${c}/api/v1/widget/${t}/comments?page=${T}&size=20`)).json(),r=n.getElementById("cb-load-more");r.style.display=o.last?"none":"block",h=T===0?o.content||[]:[...h,...o.content||[]],V(h,o.totalElements||0)}catch(e){b("Failed to load comments. Please try again."),console.error("[ChatterBox] Failed to load comments:",e)}}async function Ct(){let t=T,e=[],o=0,r=!1;for(let d=0;d<=t;d++){let y=await(await fetch(`${c}/api/v1/widget/${f}/comments?page=${d}&size=20`)).json();o=y.totalElements||0,r=y.last,e.push(...y.content||[])}h=e;let s=n.getElementById("cb-load-more");s.style.display=r?"none":"block",V(h,o)}function V(t,e){let o=n.querySelector(".cb-title");o.textContent=`Chatter \xB7 ${e} ${e===1?"comment":"comments"}`;let r=n.getElementById("cb-comments");if(t.length===0){r.innerHTML='<div class="cb-empty">No comments yet. Be the first!</div>';return}r.innerHTML=t.map(G).join("")}function G(t){let e=t.author.displayName?t.author.displayName.charAt(0).toUpperCase():"?";return console.log("comment replyCount:",t.id,t.replyCount),`
-      <div class="cb-comment ${t.replyCount>0?"cb-has-replies":""}">
-        <div class="cb-avatar">${e}</div>
+    `,u=e,w=e.id,queueMicrotask(O),Oe(),le||(Ue(),le=!0),be(w)}async function be(e){try{let o=await(await fetch(`${c}/api/v1/widget/${e}/comments?page=${D}&size=20`)).json();I=o.totalElements||0;let a=n.getElementById("cb-load-more");a.style.display=o.last?"none":"block",y=D===0?o.content||[]:[...y,...o.content||[]],me(y,o.totalElements||0)}catch(t){d("Failed to load comments. Please try again."),console.error("[ChatterBox] Failed to load comments:",t)}}async function pe(){let e=D,t=[],o=0,a=!1;for(let p=0;p<=e;p++){let k=await(await fetch(`${c}/api/v1/widget/${w}/comments?page=${p}&size=20`)).json();o=k.totalElements||0,a=k.last,t.push(...k.content||[])}y=t;let s=n.getElementById("cb-load-more");s.style.display=a?"none":"block",me(y,o)}function me(e,t){U(t);let o=n.getElementById("cb-comments");if(e.length===0){o.innerHTML='<div class="cb-empty">No comments yet. Be the first!</div>';return}e.forEach(L),o.innerHTML=e.map(ue).join("")}function ue(e){let t=e.author.displayName?e.author.displayName.charAt(0).toUpperCase():"?";return console.log("comment replyCount:",e.id,e.replyCount),`
+      <div class="cb-comment ${e.replyCount>0?"cb-has-replies":""}">
+        <div class="cb-avatar">${t}</div>
         <div class="cb-comment-body">
           <div class="cb-comment-meta">
-            <span class="cb-username">${t.author.displayName||t.author.username}</span>
-            <span class="cb-timestamp">${nt(t.createdDate)}</span>
+            <span class="cb-username">${e.author.displayName||e.author.username}</span>
+            <span class="cb-timestamp">${Be(e.createdDate)}</span>
           </div>
-          <div class="cb-comment-text">${x(t.body)}</div>
+          <div class="cb-comment-text">${v(e.body)}</div>
           <div class="cb-comment-actions">
             <button
               class="cb-action-btn cb-reply-btn"
-              data-comment-id="${t.id}"
-              data-root-comment-id="${t.id}"
-              data-reply-to="${x(t.author.displayName||t.author.username)}"
+              data-comment-id="${e.id}"
+              data-root-comment-id="${e.id}"
+              data-reply-to="${v(e.author.displayName||e.author.username)}"
             >
               Reply
             </button>
-            ${t.replyCount>0?`
+            ${e.replyCount>0?`
               <button
                 class="cb-action-btn cb-view-replies-btn"
-                data-comment-id="${t.id}"
+                data-comment-id="${e.id}"
               >
-                View ${t.replyCount} ${t.replyCount===1?"reply":"replies"}
+                View ${e.replyCount} ${e.replyCount===1?"reply":"replies"}
               </button>
             `:""}
             <div class="cb-reactions">
-              ${K(t)}
+              ${ge(e)}
             </div>
             <button
               class="cb-comment-menu-btn"
-              data-comment-id="${t.id}"
+              data-comment-id="${e.id}"
               aria-expanded="false"
             >
               \u22EF
             </button>
+            ${fe(e)?`
+              <button
+                class="cb-mod-menu-btn"
+                data-comment-id="${e.id}"
+              >
+                Moderate
+              </button>
+            `:""}
           </div>
           <div
             class="cb-reply-container"
-            id="reply-container-${t.id}"
+            id="reply-container-${e.id}"
           ></div>
         </div>
-          ${t.replyCount>0?`
+          ${e.replyCount>0?`
             <div
               class="cb-replies"
-              id="replies-${t.id}"
+              id="replies-${e.id}"
             ></div>
           `:""}
         
       </div>
-    `}async function W(t){let e=n.getElementById(`replies-${t}`);if(!e){let g=n.getElementById(`reply-container-${t}`);if(!g)return;g.insertAdjacentHTML("afterend",`
+    `}function U(e=I){I=e;let t=n.querySelector(".cb-title");t&&(t.textContent=`Chatter \xB7 ${I} ${I===1?"comment":"comments"}`)}function fe(e){let t=e.permissions||{};return t.canPin||t.canLock||t.canMuteAuthor||t.canDelete}async function V(e){let t=n.getElementById(`replies-${e}`);if(!t){let p=n.getElementById(`reply-container-${e}`);if(!p)return;p.insertAdjacentHTML("afterend",`
           <div
             class="cb-replies"
-            id="replies-${t}"
+            id="replies-${e}"
           ></div>
-        `),e=n.getElementById(`replies-${t}`)}if(e.innerHTML='<div class="cb-loading">Loading replies...</div>',C.has(t)){e.innerHTML=C.get(t);return}let s=(await(await fetch(`${c}/api/v1/widget/${f}/comments/${t}`)).json()).content||[],d=s.length?s.map(g=>H(g,t)).join(""):"";C.set(t,d),e.innerHTML=d}function H(t,e){let o=t.author.displayName?t.author.displayName.charAt(0).toUpperCase():"?",r=t.author.displayName||t.author.username;return`
+        `),t=n.getElementById(`replies-${e}`)}if(t.innerHTML='<div class="cb-loading">Loading replies...</div>',T.has(e)){let p=T.get(e);t.innerHTML=p.length?p.map(B=>W(B,e)).join(""):"";return}let s=(await(await fetch(`${c}/api/v1/widget/${w}/comments/${e}`)).json()).content||[];s.forEach(L),T.set(e,s),t.innerHTML=s.length?s.map(p=>W(p,e)).join(""):""}function W(e,t){let o=e.author.displayName?e.author.displayName.charAt(0).toUpperCase():"?",a=e.author.displayName||e.author.username;return`
       <div class="cb-comment cb-reply">
         <div class="cb-avatar">
           ${o}
@@ -231,61 +297,89 @@
         <div class="cb-comment-body">
           <div class="cb-comment-meta">
             <span class="cb-username">
-              ${r}
+              ${a}
             </span>
             <span class="cb-timestamp">
-              ${nt(t.createdDate)}
+              ${Be(e.createdDate)}
             </span>
           </div>
 
           <div class="cb-comment-text">
-            ${x(t.body)}
+            ${v(e.body)}
           </div>
 
           <div class="cb-comment-actions">
             <button
               class="cb-action-btn cb-reply-btn"
-              data-comment-id="${t.id}"
-              data-root-comment-id="${e}"
-              data-reply-to="${x(r)}"
+              data-comment-id="${e.id}"
+              data-root-comment-id="${t}"
+              data-reply-to="${v(a)}"
             >
               Reply
             </button>
 
             <div class="cb-reactions">
-              ${K(t)}
+              ${ge(e)}
             </div>
             <button
               class="cb-comment-menu-btn"
-              data-comment-id="${t.id}"
+              data-comment-id="${e.id}"
               aria-expanded="false"
             >
               \u22EF
             </button>
+            ${fe(e)?`
+              <button
+                class="cb-mod-menu-btn"
+                data-comment-id="${e.id}"
+              >
+                Moderate
+              </button>
+            `:""}
           </div>
 
           <div
             class="cb-reply-container"
-            id="reply-container-${t.id}"
+            id="reply-container-${e.id}"
           ></div>
         </div>
       </div>
-    `}function K(t){let e={};return(t.reactions||[]).forEach(o=>{e[o.emoji]=o.count}),u.map(o=>{let r=e[o]||0;return`
+    `}function ge(e){let t={};for(let a of e.reactions||[])t[a.reactionType]=a;let o="";for(let a of ie){let s=t[a],p=s?s.count:0,B=s?s.reacted:!1,k=m[a];o+=`
         <button
-          class="cb-reaction-btn"
-          data-comment-id="${t.id}"
-          data-emoji="${o}"
+          class="cb-reaction-btn ${B?"cb-reaction-active":""}"
+          data-comment-id="${e.id}"
+          data-reaction-type="${a}"
         >
-          ${o}
-          ${r>0?`<span>${r}</span>`:""}
+          ${k}
+          ${p>0?`<span>${p}</span>`:""}
         </button>
-      `}).join("")}function gt(){n.addEventListener("click",async t=>{if(t.target.closest("#cb-load-more")){T+=1,await Y(f);return}let o=t.target.closest(".cb-tab");if(o){let i=o.dataset.tab;n.querySelectorAll(".cb-tab").forEach(a=>{a.classList.remove("cb-tab-active")}),o.classList.add("cb-tab-active"),n.getElementById("cb-comments-panel").style.display=i==="comments"?"block":"none",n.getElementById("cb-rules-panel").style.display=i==="rules"?"block":"none",i==="rules"&&!E&&(await Q(),E=!0);return}let r=t.target.closest(".cb-comment-menu-btn");if(r){let i=n.querySelector(".cb-comment-menu"),a=n.querySelector('.cb-comment-menu-btn[aria-expanded="true"]');if(a&&a.setAttribute("aria-expanded","false"),i&&(i.remove(),a===r))return;r.setAttribute("aria-expanded","true"),r.insertAdjacentHTML("afterend",dt(r.dataset.commentId));return}let s=t.target.closest(".cb-report-comment");if(s){if(!await S())return;let i=s.dataset.commentId;E||(await Q(),E=!0),xt(i),n.querySelector(".cb-comment-menu")?.remove();return}let d=t.target.closest(".cb-report-submit");if(d){let i=d.dataset.commentId,a=n.getElementById("cb-report-reason").value,p=n.getElementById("cb-report-details").value.trim(),k=n.getElementById("cb-report-rule")?.value||null;await L(`${c}/api/v1/widget/${f}/comments/${i}/report`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:a,explanation:p,ruleId:k})}),n.querySelector(".cb-report-modal-backdrop")?.remove(),b("Report submitted.");return}if(t.target.closest(".cb-report-close")){n.querySelector(".cb-report-modal-backdrop")?.remove();return}let y=t.target.closest(".cb-copy-comment-link");if(y){let i=y.dataset.commentId,a=`${window.location.href}#comment-${i}`;await navigator.clipboard.writeText(a),b("Comment link copied."),n.querySelector(".cb-comment-menu")?.remove(),n.querySelector('.cb-comment-menu-btn[aria-expanded="true"]')?.setAttribute("aria-expanded","false");return}let m=t.target.closest(".cb-reaction-btn");if(m){if(!await S())return;let i=m.dataset.commentId,a=m.dataset.emoji;m.disabled=!0;try{await L(`${c}/api/v1/widget/comments/${i}/reactions`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({emoji:a})});let p=m.querySelector("span");p?p.textContent=Number(p.textContent)+1:m.insertAdjacentHTML("beforeend","<span>1</span>")}catch(p){m.disabled=!1,b("Failed to add reaction. Please try again."),console.error("[ChatterBox] Failed to react:",p)}return}let I=t.target.closest(".cb-reply-btn");if(I){if(!await S())return;let i=I.dataset.commentId,a=I.dataset.replyTo,p=I.dataset.rootCommentId||i,w=n.getElementById(`reply-container-${i}`);if(w.innerHTML.trim()){w.innerHTML="";return}let k=a?`@${a} `:"";w.innerHTML=`
+      `}return o}function Fe(){let e=n.querySelector(".cb-header");n.querySelector(".cb-box-mod-actions")?.remove(),e.insertAdjacentHTML("beforeend",ae(u))}function O(){let e=n.getElementById("cb-input"),t=n.getElementById("cb-submit-btn");if(!e||!t||!u)return;let o=u.locked||!u.active;e.disabled=o,t.disabled=o,e.placeholder=u.active?u.locked?"This discussion is locked.":"Join the chatter...":"This discussion is inactive."}function Ue(){n.addEventListener("click",async e=>{if(e.target.closest("#cb-load-more")){D+=1,await be(w);return}let o=e.target.closest(".cb-tab");if(o){let r=o.dataset.tab;n.querySelectorAll(".cb-tab").forEach(i=>{i.classList.remove("cb-tab-active")}),o.classList.add("cb-tab-active"),n.getElementById("cb-comments-panel").style.display=r==="comments"?"block":"none",n.getElementById("cb-rules-panel").style.display=r==="rules"?"block":"none",r==="rules"&&!F&&(await xe(),F=!0);return}let a=e.target.closest(".cb-box-mod-action");if(a){if(!await g())return;let r=a.dataset.boxAction;if(r==="empty"&&!confirm("Delete every comment in this discussion?"))return;if(!(await $(`${c}/api/v1/widget/boxes/${w}/${r}`,{method:"PUT"})).ok){d("Failed to update discussion.");return}if(r==="shut"&&(u.locked=!0),r==="open"&&(u.locked=!1),r==="deactivate"&&(u.active=!u.active),r==="empty"){y=[],P.clear(),T.clear(),U(0);let l=n.getElementById("cb-comments");l.innerHTML='<div class="cb-empty">No comments yet. Be the first!</div>';let b=n.getElementById("cb-load-more");b.style.display="none"}n.querySelectorAll(".cb-reply-container").forEach(l=>{l.innerHTML=""}),Fe(),O(),d(`Box updated. Action: ${r}`);return}let s=e.target.closest(".cb-mod-menu-btn");if(s){let r=n.querySelector(".cb-mod-menu");if(r){let l=r.dataset.commentId;if(r.remove(),l===s.dataset.commentId)return}let i=R(s.dataset.commentId);if(!i)return;s.insertAdjacentHTML("afterend",qe(i));return}let p=e.target.closest(".cb-lock-comment");if(p){if(!await g())return;let r=p.dataset.commentId;if(!(await $(`${c}/api/v1/dashboard/moderation/${M}/comments/${r}/lock`,{method:"PUT"})).ok){d("Failed to update comment lock.");return}d("Comment updated."),n.querySelector(".cb-mod-menu")?.remove(),await pe();return}let B=e.target.closest(".cb-pin-comment");if(B){if(!await g())return;let r=B.dataset.commentId;if(!(await $(`${c}/api/v1/dashboard/moderation/${M}/comments/${r}/pin`,{method:"PUT"})).ok){d("Failed to update pinned comment.");return}d("Comment updated."),n.querySelector(".cb-mod-menu")?.remove(),await pe();return}let k=e.target.closest(".cb-mod-delete-comment");if(k){if(!await g())return;let r=k.dataset.commentId;if(!confirm("Delete this comment?"))return;if(!(await $(`${c}/api/v1/widget/${w}/comments/${r}`,{method:"DELETE"})).ok){d("Failed to delete comment.");return}P.delete(r),y=y.filter(l=>l.id!==r),U(Math.max(I-1,0)),k.closest(".cb-comment")?.remove(),d("Comment deleted."),n.querySelector(".cb-mod-menu")?.remove();return}let Ce=e.target.closest(".cb-mute-user");if(Ce){if(!await g())return;let r=Ce.dataset.userId,i=prompt("Reason for muting this user?")||"";if(!(await $(`${c}/api/v1/dashboard/moderation/${M}/mute/${r}`,{method:"POST",headers:{"Content-Type":"text/plain"},body:i})).ok){d("Failed to mute user.");return}d("User muted."),n.querySelector(".cb-mod-menu")?.remove();return}let z=e.target.closest(".cb-comment-menu-btn");if(z){let r=n.querySelector(".cb-comment-menu"),i=n.querySelector('.cb-comment-menu-btn[aria-expanded="true"]');if(i&&i.setAttribute("aria-expanded","false"),r&&(r.remove(),i===z))return;z.setAttribute("aria-expanded","true");let l=R(z.dataset.commentId);z.insertAdjacentHTML("afterend",He(z.dataset.commentId,l?.permissions||{}));return}let Se=e.target.closest(".cb-report-comment");if(Se){if(!await g())return;let r=Se.dataset.commentId;F||(await xe(),F=!0),Ge(r),n.querySelector(".cb-comment-menu")?.remove();return}let Ie=e.target.closest(".cb-report-submit");if(Ie){let r=Ie.dataset.commentId,i=n.getElementById("cb-report-reason").value,l=n.getElementById("cb-report-details").value.trim(),f=n.getElementById("cb-report-rule")?.value||null;await $(`${c}/api/v1/widget/${w}/comments/${r}/report`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:i,explanation:l,ruleId:f})}),n.querySelector(".cb-report-modal-backdrop")?.remove(),d("Report submitted.");return}if(e.target.closest(".cb-report-close")){n.querySelector(".cb-report-modal-backdrop")?.remove();return}let Ee=e.target.closest(".cb-copy-comment-link");if(Ee){let r=Ee.dataset.commentId,i=`${window.location.href}#comment-${r}`;await navigator.clipboard.writeText(i),d("Comment link copied."),n.querySelector(".cb-comment-menu")?.remove(),n.querySelector('.cb-comment-menu-btn[aria-expanded="true"]')?.setAttribute("aria-expanded","false");return}let Z=e.target.closest(".cb-edit-comment");if(Z){if(!await g())return;let r=Z.dataset.commentId,l=Z.closest(".cb-comment").querySelector(".cb-comment-text"),f=R(r)?.body||l.textContent.trim();n.querySelector(".cb-comment-menu")?.remove(),l.innerHTML=`
+          <div class="cb-edit-box">
+            <textarea class="cb-edit-input">${v(f)}</textarea>
+
+            <div class="cb-inline-actions">
+              <button
+                class="cb-edit-cancel"
+                data-comment-id="${r}"
+              >
+                Cancel
+              </button>
+
+              <button
+                class="cb-edit-save"
+                data-comment-id="${r}"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        `,l.querySelector(".cb-edit-input")?.focus();return}let E=e.target.closest(".cb-edit-save");if(E){if(!await g())return;let r=E.dataset.commentId,i=E.closest(".cb-comment"),b=i.querySelector(".cb-edit-input").value.trim();if(!b){d("Comment cannot be empty.");return}E.disabled=!0,E.textContent="Saving...";try{if(!(await $(`${c}/api/v1/widget/comments/${r}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({body:b})})).ok){d("Failed to edit comment.");return}let x=R(r);x&&(x.body=b,L(x));let S=i.querySelector(".cb-comment-text");S.innerHTML=v(b),d("Comment updated.")}catch(f){d("Failed to edit comment."),console.error("[ChatterBox] Edit failed:",f)}finally{E.disabled=!1,E.textContent="Save"}return}let ee=e.target.closest(".cb-edit-cancel");if(ee){let r=ee.dataset.commentId,l=ee.closest(".cb-comment").querySelector(".cb-comment-text"),b=R(r);b&&(l.innerHTML=v(b.body));return}let j=e.target.closest(".cb-delete-comment");if(j){if(!await g())return;let r=j.dataset.commentId;if(!confirm("Delete this comment?"))return;j.disabled=!0,j.textContent="Deleting...";try{if(!(await $(`${c}/api/v1/widget/${w}/comments/${r}`,{method:"DELETE"})).ok){d("Failed to delete comment.");return}j.closest(".cb-comment")?.remove(),P.delete(r),y=y.filter(f=>f.id!==r),n.querySelector(".cb-comment-menu")?.remove(),d("Comment deleted.")}catch(l){d("Failed to delete comment."),console.error("[ChatterBox] Delete failed:",l)}return}let H=e.target.closest(".cb-reaction-btn");if(H){if(!await g())return;let r=H.dataset.commentId,i=H.dataset.reactionType;H.disabled=!0;try{let l=await $(`${c}/api/v1/widget/comments/${r}/reactions`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reactionType:i})});if(!l.ok){d("Failed to add reaction. Please try again.");return}let b=await l.json();Ne(H,b);let f=R(r);if(f){let x=f.reactions||[],S=x.find(_=>_.reactionType===b.reactionType);S?(S.count=b.count,S.reacted=b.reacted):x.push(b),f.reactions=x,L(f)}}catch(l){d("Failed to add reaction. Please try again."),console.error("[ChatterBox] Failed to react:",l)}finally{H.disabled=!1}return}let N=e.target.closest(".cb-reply-btn");if(N){if(u?.locked||!u?.active){d(u.active?"This discussion is locked.":"This discussion is inactive.");return}if(!await g())return;let r=N.dataset.commentId,i=N.dataset.replyTo,l=N.dataset.rootCommentId||r,b=n.getElementById(`reply-container-${r}`);if(b.innerHTML.trim()){b.innerHTML="";return}let f=i?`@${i} `:"";b.innerHTML=`
           <div class="cb-inline-reply">
 
             <textarea
               class="cb-inline-input"
               placeholder="Write a reply..."
-            >${k}</textarea>
+            >${f}</textarea>
 
             <div class="cb-inline-actions">
 
@@ -295,8 +389,8 @@
 
               <button
                 class="cb-inline-submit"
-                data-comment-id="${i}"
-                data-root-comment-id="${p}"
+                data-comment-id="${r}"
+                data-root-comment-id="${l}"
               >
                 Reply
               </button>
@@ -304,7 +398,7 @@
             </div>
 
           </div>
-        `,queueMicrotask(()=>{w.querySelector("textarea")?.focus()});return}let rt=t.target.closest(".cb-view-replies-btn");if(rt){let i=rt.dataset.commentId,a=n.getElementById(`replies-${i}`);if(a.innerHTML.trim()){a.innerHTML="";return}await W(i);return}let v=t.target.closest(".cb-inline-submit");if(v){if(!await S())return;let i=v.dataset.commentId,a=v.dataset.rootCommentId||i,p=v.closest(".cb-inline-reply"),k=p.querySelector("textarea").value.trim();if(!k)return;v.disabled=!0,v.textContent="Posting...";try{console.time("post");let q=await L(`${c}/api/v1/widget/${f}/comments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({body:k,parentId:a})});console.timeEnd("post");let it=p.closest(".cb-reply-container"),ct=await q.json(),F=h.find(M=>M.id===a);F&&(F.replyCount=(F.replyCount||0)+1);let N=n.getElementById(`replies-${a}`);N||(await W(a),N=n.getElementById(`replies-${a}`)),N.insertAdjacentHTML("beforeend",H(ct,a));let O=n.querySelector(`[data-comment-id="${a}"].cb-view-replies-btn`);if(O){let M=Number(O.textContent.match(/\d+/)?.[0]||0)+1;O.textContent=`View ${M} ${M===1?"reply":"replies"}`}let kt=(C.get(a)||"")+H(ct,a);C.set(a,kt),it&&(it.innerHTML="")}catch(q){b("Failed to post reply. Please try again."),console.error("[ChatterBox] Reply failed:",q)}finally{v.disabled=!1,v.textContent="Reply"}return}let at=t.target.closest(".cb-inline-cancel");if(at){let i=at.closest(".cb-reply-container");i&&(i.innerHTML="")}if(t.target.closest(".cb-auth-close")){n.getElementById("cb-auth-modal")?.remove();return}if(t.target.closest(".cb-auth-login")){st(n),console.log("[ChatterBox] Login clicked");return}if(t.target.closest(".cb-auth-signup")){lt(n),console.log("[ChatterBox] Sign up clicked");return}if(t.target.closest(".cb-auth-primary-login")){await X();return}if(t.target.closest(".cb-auth-primary-signup")){await vt();return}t.target.closest(".cb-comment-menu")||(n.querySelector(".cb-comment-menu")?.remove(),n.querySelector('.cb-comment-menu-btn[aria-expanded="true"]')?.setAttribute("aria-expanded","false"))})}function ft(){let t=n.getElementById("cb-submit-btn"),e=n.getElementById("cb-input");e.addEventListener("input",()=>{e.style.height="auto",e.style.height=`${Math.min(e.scrollHeight,160)}px`}),e.addEventListener("keydown",o=>{o.key==="Enter"&&!o.shiftKey&&(o.preventDefault(),t.click())}),t.addEventListener("click",async()=>{let o=e.value.trim();if(!o||t.disabled||!await S())return;if(!await _()){R();return}let s=ht(o);t.disabled=!0,t.textContent="Posting...";try{console.time("post");let d=await L(`${c}/api/v1/widget/${f}/comments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({body:o})});console.timeEnd("post"),e.value="",n.getElementById(s)?.remove();let g=await d.json();h.unshift(g);let y=n.querySelector(".cb-title"),m=h.length;y.textContent=`Chatter \xB7 ${m} ${m===1?"comment":"comments"}`,n.getElementById("cb-comments").insertAdjacentHTML("afterbegin",G(g))}catch(d){n.getElementById(s)?.remove(),b("Failed to post comment. Please try again."),console.error("[ChatterBox] Failed to post comment:",d)}finally{t.disabled=!1,t.textContent="Comment"}})}function ht(t){let e=n.getElementById("cb-comments"),o=`cb-pending-${crypto.randomUUID()}`,r=`
+        `,queueMicrotask(()=>{b.querySelector("textarea")?.focus()});return}let Te=e.target.closest(".cb-view-replies-btn");if(Te){let r=Te.dataset.commentId,i=n.getElementById(`replies-${r}`);if(i.innerHTML.trim()){i.innerHTML="";return}await V(r);return}let C=e.target.closest(".cb-inline-submit");if(C){if(u?.locked||!u?.active){d(u.active?"This discussion is locked.":"This discussion is inactive.");return}if(!await g())return;let r=C.dataset.commentId,i=C.dataset.rootCommentId||r,l=C.closest(".cb-inline-reply"),f=l.querySelector("textarea").value.trim();if(!f)return;C.disabled=!0,C.textContent="Posting...";let x=null,S=n.getElementById(`replies-${i}`);S||(await V(i),S=n.getElementById(`replies-${i}`)),x=Ye(i,f);try{console.time("post");let _=await $(`${c}/api/v1/widget/${w}/comments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({body:f,parentId:i})});console.timeEnd("post");let Le=l.closest(".cb-reply-container"),te=await _.json();x&&n.getElementById(x)?.remove(),L(te);let Re=T.get(i)||[];Re.push(te),T.set(i,Re);let oe=y.find(J=>J.id===i);oe&&(oe.replyCount=(oe.replyCount||0)+1);let ne=n.getElementById(`replies-${i}`);ne||(await V(i),ne=n.getElementById(`replies-${i}`)),ne.insertAdjacentHTML("beforeend",W(te,i));let re=n.querySelector(`[data-comment-id="${i}"].cb-view-replies-btn`);if(re){let J=Number(re.textContent.match(/\d+/)?.[0]||0)+1;re.textContent=`View ${J} ${J===1?"reply":"replies"}`}Le&&(Le.innerHTML="")}catch(_){x&&n.getElementById(x)?.remove(),d("Failed to post reply. Please try again."),console.error("[ChatterBox] Reply failed:",_)}finally{C.disabled=!1,C.textContent="Reply"}return}let Me=e.target.closest(".cb-inline-cancel");if(Me){let r=Me.closest(".cb-reply-container");r&&(r.innerHTML="")}if(e.target.closest(".cb-auth-close")){n.getElementById("cb-auth-modal")?.remove();return}if(e.target.closest(".cb-auth-login")){Ae(n),console.log("[ChatterBox] Login clicked");return}if(e.target.closest(".cb-auth-signup")){ze(n),console.log("[ChatterBox] Sign up clicked");return}if(e.target.closest(".cb-auth-primary-login")){await ye();return}if(e.target.closest(".cb-auth-primary-signup")){await Ve();return}!e.target.closest(".cb-comment-menu")&&!e.target.closest(".cb-comment-menu-btn")&&(n.querySelector(".cb-comment-menu")?.remove(),n.querySelector('.cb-comment-menu-btn[aria-expanded="true"]')?.setAttribute("aria-expanded","false")),!e.target.closest(".cb-mod-menu")&&!e.target.closest(".cb-mod-menu-btn")&&n.querySelector(".cb-mod-menu")?.remove()})}function Oe(){let e=n.getElementById("cb-submit-btn"),t=n.getElementById("cb-input");t.addEventListener("input",()=>{t.style.height="auto",t.style.height=`${Math.min(t.scrollHeight,160)}px`}),t.addEventListener("keydown",o=>{o.key==="Enter"&&!o.shiftKey&&(o.preventDefault(),e.click())}),e.addEventListener("click",async()=>{let o=t.value.trim();if(!o||e.disabled)return;if(u?.locked||!u?.active){d(u.active?"This discussion is locked.":"This discussion is inactive."),O();return}if(!await g())return;let a=Je(o);e.disabled=!0,e.textContent="Posting...";try{console.time("post");let s=await $(`${c}/api/v1/widget/${w}/comments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({body:o})});console.timeEnd("post"),t.value="",n.getElementById(a)?.remove();let p=await s.json();L(p),y.unshift(p),U(I+1),n.getElementById("cb-comments").insertAdjacentHTML("afterbegin",ue(p))}catch(s){n.getElementById(a)?.remove(),d("Failed to post comment. Please try again."),console.error("[ChatterBox] Failed to post comment:",s)}finally{e.disabled=!1,e.textContent="Comment",O()}})}function Ne(e,t){e.classList.toggle("cb-reaction-active",t.reacted);let o=e.querySelector("span");t.count>0?o?o.textContent=t.count:e.insertAdjacentHTML("beforeend",`<span>${t.count}</span>`):o?.remove()}function Je(e){let t=n.getElementById("cb-comments"),o=`cb-pending-${crypto.randomUUID()}`,a=`
       <div id="${o}" class="cb-comment cb-comment-pending">
         <div class="cb-avatar">Y</div>
 
@@ -315,16 +409,34 @@
           </div>
 
           <div class="cb-comment-text">
-            ${x(t)}
+            ${v(e)}
           </div>
         </div>
       </div>
-    `;return e.insertAdjacentHTML("afterbegin",r),o}async function Q(){let t=n.getElementById("cb-rules-list");t.innerHTML='<div class="cb-loading">Loading rules...</div>';let o=await(await fetch(`${c}/api/v1/dashboard/sites/${j}/rules`)).json();cachedRules=o;let r=n.getElementById("cb-rules-tab");r.textContent=`Rules ${o.length?`(${o.length})`:""}`,t.innerHTML=o.length?o.map(s=>`
-          <div class="cb-rule">
-            <div class="cb-rule-title">${x(s.title)}</div>
-            <div class="cb-rule-description">${x(s.description||"")}</div>
+    `;return t.insertAdjacentHTML("afterbegin",a),o}function Ye(e,t){let o=n.getElementById(`replies-${e}`);if(!o)return null;let a=`cb-pending-reply-${crypto.randomUUID()}`;return o.insertAdjacentHTML("beforeend",`
+        <div
+          id="${a}"
+          class="cb-comment cb-reply cb-comment-pending"
+        >
+          <div class="cb-avatar">Y</div>
+
+          <div class="cb-comment-body">
+            <div class="cb-comment-meta">
+              <span class="cb-username">You</span>
+              <span class="cb-timestamp">just now</span>
+            </div>
+
+            <div class="cb-comment-text">
+              ${v(t)}
+            </div>
           </div>
-        `).join(""):'<div class="cb-empty">No site rules yet.</div>'}function St(){return l.token?{Authorization:`Bearer ${l.token}`}:{}}function Bt(){return!!l.token}async function S(){return!l.token||!await _()?(R(),!1):!0}function R(){if(n.getElementById("cb-auth-modal"))return;let e=document.createElement("div");e.id="cb-auth-modal",e.className="cb-auth-backdrop",e.innerHTML=`
+        </div>
+      `),a}function L(e){P.set(e.id,e)}function R(e){return P.get(e)||null}async function xe(){let e=n.getElementById("cb-rules-list");e.innerHTML='<div class="cb-loading">Loading rules...</div>';let o=await(await fetch(`${c}/api/v1/dashboard/sites/${M}/rules`)).json();G=o;let a=n.getElementById("cb-rules-tab");a.textContent=`Rules ${o.length?`(${o.length})`:"0"}`,e.innerHTML=o.length?o.map(s=>`
+          <div class="cb-rule">
+            <div class="cb-rule-title">${v(s.rule)}</div>
+            <div class="cb-rule-description">${v(s.description||"")}</div>
+          </div>
+        `).join(""):'<div class="cb-empty">No site rules yet.</div>'}async function g(){return!h.token||!await we()?(he(),!1):!0}function he(){if(n.getElementById("cb-auth-modal"))return;let t=document.createElement("div");t.id="cb-auth-modal",t.className="cb-auth-backdrop",t.innerHTML=`
       <div class="cb-auth-modal">
         <button class="cb-auth-close">\xD7</button>
 
@@ -339,7 +451,7 @@
           <button class="cb-auth-signup">Sign up</button>
         </div>
       </div>
-    `,n.querySelector(".cb-root").appendChild(e)}function xt(t){n.querySelector(".cb-report-modal-backdrop")?.remove();let e=document.createElement("div");e.className="cb-report-modal-backdrop",e.innerHTML=`
+    `,n.querySelector(".cb-root").appendChild(t)}function Ge(e){n.querySelector(".cb-report-modal-backdrop")?.remove();let t=document.createElement("div");t.className="cb-report-modal-backdrop",t.innerHTML=`
       <div class="cb-report-modal">
         <button class="cb-report-close">\xD7</button>
 
@@ -355,12 +467,12 @@
           <option value="OTHER">Other</option>
         </select>
 
-        ${cachedRules.length?`
+        ${G.length?`
           <select class="cb-report-select" id="cb-report-rule">
             <option value="">Select rule violated optional</option>
-            ${cachedRules.map(o=>`
+            ${G.map(o=>`
               <option value="${o.id}">
-                ${x(o.title)}
+                ${v(o.title)}
               </option>
             `).join("")}
           </select>
@@ -374,12 +486,12 @@
 
         <button
           class="cb-report-submit"
-          data-comment-id="${t}"
+          data-comment-id="${e}"
         >
           Submit report
         </button>
       </div>
-    `,n.querySelector(".cb-root").appendChild(e)}async function X(){let t=n.querySelector("#cb-login-username")?.value.trim(),e=n.querySelector("#cb-login-password")?.value.trim();if(!t||!e){b("Please fill in all fields.");return}try{let o=new URLSearchParams({grant_type:"password",client_id:"chatterbox-api",username:t,password:e});console.time("login");let r=await fetch("http://127.0.0.1:8080/realms/chatterbox/protocol/openid-connect/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:o});if(console.timeEnd("login"),!r.ok){ot("Invalid username or password.");return}let s=await r.json();l.token=s.access_token,Z(s),console.log(A(l.token)),tt()}catch(o){ot("Please enter your username and password."),console.error(o)}}function Z(t){l.token=t.access_token,localStorage.setItem("chatterbox_token",t.access_token),localStorage.setItem("chatterbox_refresh_token",t.refresh_token),localStorage.setItem("chatterbox_last_active",Date.now().toString())}function B(){l.token=null,localStorage.removeItem("chatterbox_token"),localStorage.removeItem("chatterbox_refresh_token"),localStorage.removeItem("chatterbox_last_active")}async function L(t,e={}){return console.log("token expiring?",P(l.token)),console.log("token expired?",yt(l.token)),await _()?(localStorage.setItem("chatterbox_last_active",Date.now().toString()),fetch(t,{...e,headers:{...e.headers||{},Authorization:`Bearer ${l.token}`}})):(B(),tt(),new Response(null,{status:401}))}async function _(){return await D,l.token?P(l.token)?await et()&&!!l.token:!0:!1}function tt(){n.getElementById("cb-auth-modal")?.remove(),n.querySelector(".cb-auth-backdrop")?.remove()}async function et(){return $||($=(async()=>{try{let t=localStorage.getItem("chatterbox_refresh_token");if(!t)return B(),!1;let e=new URLSearchParams({grant_type:"refresh_token",client_id:"chatterbox-api",refresh_token:t}),o=await fetch("http://127.0.0.1:8080/realms/chatterbox/protocol/openid-connect/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:e});if(!o.ok)return B(),!1;let r=await o.json();return Z(r),!0}finally{$=null}})(),$)}function A(t){try{let o=t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"),r=decodeURIComponent(atob(o).split("").map(s=>"%"+("00"+s.charCodeAt(0).toString(16)).slice(-2)).join(""));return JSON.parse(r)}catch{return null}}function P(t){let e=A(t);if(!e?.exp)return!0;let o=e.exp*1e3,r=Date.now(),s=1e3*60*2;return o-r<s}function yt(t){let e=A(t);return e?.exp?e.exp*1e3<=Date.now():!0}async function vt(){let t=n.querySelector("#cb-signup-username")?.value.trim(),e=n.querySelector("#cb-signup-email")?.value.trim(),o=n.querySelector("#cb-signup-password")?.value.trim();if(!t||!e||!o){b("Please fill in all fields.");return}try{await fetch(`${c}/api/v1/auth/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:t,email:e,password:o})}),await X()}catch(r){b("Sign up failed."),console.error(r)}}function ot(t){let e=n.getElementById("cb-auth-error");if(!e){b(t);return}e.textContent=t,e.style.display="block",clearTimeout(e._timeoutId),e._timeoutId=setTimeout(()=>{e.textContent="",e.style.display="none"},5e3)}function nt(t){let e=new Date(t),r=Math.floor((new Date-e)/1e3);return r<60?"just now":r<3600?`${Math.floor(r/60)}m ago`:r<86400?`${Math.floor(r/3600)}h ago`:`${Math.floor(r/86400)}d ago`}function x(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}function b(t){n.getElementById("cb-error")?.remove();let o=document.createElement("div");o.id="cb-error",o.className="cb-error",o.textContent=t,n.querySelector(".cb-root").appendChild(o),setTimeout(()=>{o.remove()},2500)}function wt(){return`
+    `,n.querySelector(".cb-root").appendChild(t)}async function ye(){let e=n.querySelector("#cb-login-username")?.value.trim(),t=n.querySelector("#cb-login-password")?.value.trim();if(!e||!t){d("Please fill in all fields.");return}try{let o=new URLSearchParams({grant_type:"password",client_id:"chatterbox-api",username:e,password:t});console.time("login");let a=await fetch("http://127.0.0.1:8080/realms/chatterbox/protocol/openid-connect/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:o});if(console.timeEnd("login"),!a.ok){ke("Invalid username or password.");return}let s=await a.json();h.token=s.access_token,ve(s),console.log(X(h.token)),K()}catch(o){ke("Please enter your username and password."),console.error(o)}}function ve(e){h.token=e.access_token,localStorage.setItem("chatterbox_token",e.access_token),localStorage.setItem("chatterbox_refresh_token",e.refresh_token),localStorage.setItem("chatterbox_last_active",Date.now().toString())}function A(){h.token=null,localStorage.removeItem("chatterbox_token"),localStorage.removeItem("chatterbox_refresh_token"),localStorage.removeItem("chatterbox_last_active")}async function $(e,t={}){if(!await we())return A(),K(),new Response(null,{status:401});localStorage.setItem("chatterbox_last_active",Date.now().toString());let a=()=>fetch(e,{...t,headers:{...t.headers||{},Authorization:`Bearer ${h.token}`}}),s=await a();return s.status===401&&(await Q()?s=await a():(A(),K())),s}async function we(){return await ce,h.token?$e(h.token)?await Q()&&!!h.token:!0:!1}function K(){n.getElementById("cb-auth-modal")?.remove(),n.querySelector(".cb-auth-backdrop")?.remove()}async function Q(){return q||(q=(async()=>{try{let e=localStorage.getItem("chatterbox_refresh_token");if(!e)return A(),!1;let t=new URLSearchParams({grant_type:"refresh_token",client_id:"chatterbox-api",refresh_token:e}),o=await fetch("http://127.0.0.1:8080/realms/chatterbox/protocol/openid-connect/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:t});if(!o.ok)return A(),!1;let a=await o.json();return ve(a),!0}finally{q=null}})(),q)}function X(e){try{let o=e.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"),a=decodeURIComponent(atob(o).split("").map(s=>"%"+("00"+s.charCodeAt(0).toString(16)).slice(-2)).join(""));return JSON.parse(a)}catch{return null}}function $e(e){let t=X(e);if(!t?.exp)return!0;let o=t.exp*1e3,a=Date.now(),s=1e3*60*2;return o-a<s}function Ke(e){let t=X(e);return t?.exp?t.exp*1e3<=Date.now():!0}async function Ve(){let e=n.querySelector("#cb-signup-username")?.value.trim(),t=n.querySelector("#cb-signup-email")?.value.trim(),o=n.querySelector("#cb-signup-password")?.value.trim();if(!e||!t||!o){d("Please fill in all fields.");return}try{await fetch(`${c}/api/v1/auth/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:e,email:t,password:o})}),await ye()}catch(a){d("Sign up failed."),console.error(a)}}function ke(e){let t=n.getElementById("cb-auth-error");if(!t){d(e);return}t.textContent=e,t.style.display="block",clearTimeout(t._timeoutId),t._timeoutId=setTimeout(()=>{t.textContent="",t.style.display="none"},5e3)}function Be(e){let t=new Date(e),a=Math.floor((new Date-t)/1e3);return a<60?"just now":a<3600?`${Math.floor(a/60)}m ago`:a<86400?`${Math.floor(a/3600)}h ago`:`${Math.floor(a/86400)}d ago`}function v(e){return e.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}function d(e){n.getElementById("cb-error")?.remove();let o=document.createElement("div");o.id="cb-error",o.className="cb-error",o.textContent=e,n.querySelector(".cb-root").appendChild(o),setTimeout(()=>{o.remove()},2500)}function We(){return`
       * { box-sizing: border-box; margin: 0; padding: 0; }
       :host { font-family: 'Inter', system-ui, sans-serif; }
       .cb-root { max-width: 720px; color: #e1e1e1; background: #111318; border: 1px solid #23262d; border-radius: 16px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.28); }
@@ -473,4 +585,15 @@
       .cb-rule { padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; margin-bottom: 10px; background: rgba(255,255,255,.025); } 
       .cb-rule-title { font-size: 14px; font-weight: 600; color: #f8fafc; margin-bottom: 4px; } 
       .cb-rule-description { font-size: 13px; color: #94a3b8; line-height: 1.5; }
-    `}ut()})();})();
+      .cb-edit-box { display: flex; flex-direction: column; gap: 8px; } 
+      .cb-edit-input { width: 100%; min-height: 76px; resize: vertical; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); color: #f8fafc; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-family: inherit; outline: none; } 
+      .cb-edit-input:focus { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.04); } 
+      .cb-edit-save { background: #f3f4f6; color: #111827; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; } 
+      .cb-edit-cancel { background: transparent; border: 1px solid rgba(255,255,255,.08); color: #9ca3af; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+      .cb-reaction-active { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.24); color: #f8fafc; }
+      .cb-mod-menu, .cb-box-mod-actions { display: flex; flex-direction: column; gap: 4px; } 
+      .cb-mod-menu { position: absolute; right: 0; bottom: 32px; min-width: 180px; background: #181b22; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 6px; z-index: 60; box-shadow: 0 12px 32px rgba(0,0,0,.35); } 
+      .cb-mod-menu-btn { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: #cbd5e1; border-radius: 999px; padding: 5px 9px; font-size: 12px; cursor: pointer; } 
+      .cb-box-mod-action { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: #cbd5e1; border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; } 
+      .cb-danger-item { color: #fecaca; }
+    `}_e()})();})();

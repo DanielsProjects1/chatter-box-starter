@@ -3,15 +3,18 @@ import {
   renderSignupForm
 } from './authForms.js';
 import { renderCommentMenu } from './commentMenu.js';
+import { renderCommentModerationMenu } from './commentModerationMenu.js';
+import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
 (function () {
   const API_URL = 'http://127.0.0.1:8081';
 
-  const DEFAULT_REACTIONS = ['👍', '❤️', '🔥', '😂'];
+  const REACTION_UI = {HEART: '❤️', THUMBS_UP: '👍', THUMBS_DOWN: '👎', LAUGH: '😂', SURPRISED: '😮', SAD: '😢', FIRE: '🔥' };
+  const REACTION_ORDER = [ 'THUMBS_UP', 'HEART', 'FIRE', 'LAUGH', 'SURPRISED', 'SAD', 'THUMBS_DOWN' ];
 
   const config = window.ChatterBoxConfig || {};
   let refreshPromise = null;
-  const replyCache = new Map();
+  const repliesByParentId = new Map();
   let authReadyPromise = Promise.resolve();
   const savedToken = localStorage.getItem('chatterbox_token');
   const lastActive = Number(localStorage.getItem('chatterbox_last_active') || 0);
@@ -55,10 +58,14 @@ import { renderCommentMenu } from './commentMenu.js';
   const shadow = host.attachShadow({ mode: 'open' });
 
   let currentBoxId = null;
+  let currentBox = null;
+  let totalCommentCount = 0;
+  let eventsAttached = false;
   let currentPage = 0;
   let allComments = [];
   let rulesLoaded = false;
   let cachedRules = [];
+  const commentById = new Map();
   // Initialize the widget
   async function init() {
     const pageUrl = window.location.pathname;
@@ -91,6 +98,7 @@ import { renderCommentMenu } from './commentMenu.js';
         
         <div class="cb-header">
           <span class="cb-title">Chatter</span>
+          ${renderBoxModerationMenu(box)}
         </div>
         <div id="cb-comments-panel">
           <div class="cb-composer">
@@ -121,9 +129,14 @@ import { renderCommentMenu } from './commentMenu.js';
         </div>
       </div>
     `;
+    currentBox = box;
     currentBoxId = box.id;
+    queueMicrotask(applyBoxStateToComposer);
     attachComposerListener();
-    attachGlobalEventDelegation();
+    if (!eventsAttached) {
+      attachGlobalEventDelegation();
+      eventsAttached = true;
+    }
     loadComments(currentBoxId);
   }
 
@@ -131,7 +144,7 @@ import { renderCommentMenu } from './commentMenu.js';
     try {
       const res = await fetch(`${API_URL}/api/v1/widget/${boxId}/comments?page=${currentPage}&size=20`);
       const data = await res.json();
-
+      totalCommentCount = data.totalElements || 0;
       const loadMoreBtn = shadow.getElementById('cb-load-more');
 
       loadMoreBtn.style.display = data.last ? 'none' : 'block';
@@ -181,13 +194,15 @@ import { renderCommentMenu } from './commentMenu.js';
   }
 
   function renderComments(comments, totalCount) {
-    const title = shadow.querySelector('.cb-title');
-    title.textContent = `Chatter · ${totalCount} ${totalCount === 1 ? 'comment' : 'comments'}`;
+    updateCommentTitle(totalCount);
+    // const title = shadow.querySelector('.cb-title');
+    // title.textContent = `Chatter · ${totalCount} ${totalCount === 1 ? 'comment' : 'comments'}`;
     const container = shadow.getElementById('cb-comments');
     if (comments.length === 0) {
       container.innerHTML = '<div class="cb-empty">No comments yet. Be the first!</div>';
       return;
     }
+    comments.forEach(indexComment);
     container.innerHTML = comments.map(renderComment).join('');
   }
 
@@ -232,6 +247,14 @@ import { renderCommentMenu } from './commentMenu.js';
             >
               ⋯
             </button>
+            ${hasCommentModActions(comment) ? `
+              <button
+                class="cb-mod-menu-btn"
+                data-comment-id="${comment.id}"
+              >
+                Moderate
+              </button>
+            ` : ''}
           </div>
           <div
             class="cb-reply-container"
@@ -247,6 +270,21 @@ import { renderCommentMenu } from './commentMenu.js';
         
       </div>
     `;
+  }
+
+  function updateCommentTitle(count = totalCommentCount) {
+    totalCommentCount = count;
+
+    const title = shadow.querySelector('.cb-title');
+    if (!title) return;
+
+    title.textContent =
+      `Chatter · ${totalCommentCount} ${totalCommentCount === 1 ? 'comment' : 'comments'}`;
+  }
+
+  function hasCommentModActions(comment) {
+    const p = comment.permissions || {};
+    return ( p.canPin || p.canLock || p.canMuteAuthor || p.canDelete );
   }
 
   async function openReplies(commentId) {
@@ -279,24 +317,23 @@ import { renderCommentMenu } from './commentMenu.js';
     }
 
     repliesContainer.innerHTML = '<div class="cb-loading">Loading replies...</div>';
-    if (replyCache.has(commentId)) {
-      repliesContainer.innerHTML = replyCache.get(commentId);
+    if (repliesByParentId.has(commentId)) {
+      const cachedReplies = repliesByParentId.get(commentId);
+      repliesContainer.innerHTML = cachedReplies.length
+        ? cachedReplies.map(reply => renderReply(reply, commentId)).join('')
+        : '';
       return;
     }
-
     const res = await fetch(
       `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`
     );
-
     const data = await res.json();
-
     const replies = data.content || [];
-
-    const repliesHtml = replies.length
+    replies.forEach(indexComment);
+    repliesByParentId.set(commentId, replies);
+    repliesContainer.innerHTML = replies.length
       ? replies.map(reply => renderReply(reply, commentId)).join('')
       : '';
-    replyCache.set(commentId, repliesHtml);
-    repliesContainer.innerHTML = repliesHtml;
   }
 
   function renderReply(reply, rootCommentId) {
@@ -346,6 +383,14 @@ import { renderCommentMenu } from './commentMenu.js';
             >
               ⋯
             </button>
+            ${hasCommentModActions(reply) ? `
+              <button
+                class="cb-mod-menu-btn"
+                data-comment-id="${reply.id}"
+              >
+                Moderate
+              </button>
+            ` : ''}
           </div>
 
           <div
@@ -360,23 +405,62 @@ import { renderCommentMenu } from './commentMenu.js';
   function renderReactions(comment) {
     const reactionMap = {};
 
-    (comment.reactions || []).forEach(reaction => {
-      reactionMap[reaction.emoji] = reaction.count;
-    });
+    for (const reaction of comment.reactions || []) {
+      reactionMap[reaction.reactionType] = reaction;
+    }
 
-    return DEFAULT_REACTIONS.map(emoji => {
-      const count = reactionMap[emoji] || 0;
-      return `
+    let html = '';
+
+    for (const type of REACTION_ORDER) {
+      const reaction = reactionMap[type];
+
+      const count = reaction ? reaction.count : 0;
+      const reacted = reaction ? reaction.reacted : false;
+      const emoji = REACTION_UI[type];
+
+      html += `
         <button
-          class="cb-reaction-btn"
+          class="cb-reaction-btn ${reacted ? 'cb-reaction-active' : ''}"
           data-comment-id="${comment.id}"
-          data-emoji="${emoji}"
+          data-reaction-type="${type}"
         >
           ${emoji}
           ${count > 0 ? `<span>${count}</span>` : ''}
         </button>
       `;
-    }).join('');
+    }
+
+    return html;
+  }
+
+  function refreshBoxModerationUI() {
+    const header = shadow.querySelector('.cb-header');
+    const oldMenu = shadow.querySelector('.cb-box-mod-actions');
+
+    oldMenu?.remove();
+
+    header.insertAdjacentHTML(
+      'beforeend',
+      renderBoxModerationMenu(currentBox)
+    );
+  }
+
+  function applyBoxStateToComposer() {
+    const input = shadow.getElementById('cb-input');
+    const submitBtn = shadow.getElementById('cb-submit-btn');
+
+    if (!input || !submitBtn || !currentBox) return;
+
+    const disabled = currentBox.locked || !currentBox.active;
+
+    input.disabled = disabled;
+    submitBtn.disabled = disabled;
+
+    input.placeholder = !currentBox.active
+      ? 'This discussion is inactive.'
+      : currentBox.locked
+        ? 'This discussion is locked.'
+        : 'Join the chatter...';
   }
 
   function attachGlobalEventDelegation() {
@@ -412,9 +496,183 @@ import { renderCommentMenu } from './commentMenu.js';
         return;
       }
 
-      const menuBtn = e.target.closest(
-        '.cb-comment-menu-btn'
-      );
+      const boxActionBtn = e.target.closest('.cb-box-mod-action');
+
+      if (boxActionBtn) {
+        if (!(await requireAuth())) return;
+
+        const action = boxActionBtn.dataset.boxAction;
+
+        if (
+          action === 'empty' &&
+          !confirm('Delete every comment in this discussion?')
+        ) {
+          return;
+        }
+
+        const res = await authFetch(
+          `${API_URL}/api/v1/widget/boxes/${currentBoxId}/${action}`,
+          { method: 'PUT' }
+        );
+
+        if (!res.ok) {
+          showError('Failed to update discussion.');
+          return;
+        }
+        if (action === 'shut') currentBox.locked = true;
+        if (action === 'open') currentBox.locked = false;
+        if (action === 'deactivate') {
+          currentBox.active = !currentBox.active;
+        }
+        if (action === 'empty') {
+          allComments = [];
+          commentById.clear();
+          repliesByParentId.clear();
+          updateCommentTitle(0);
+
+          const container = shadow.getElementById('cb-comments');
+          container.innerHTML = '<div class="cb-empty">No comments yet. Be the first!</div>';
+
+          const loadMoreBtn = shadow.getElementById('cb-load-more');
+          loadMoreBtn.style.display = 'none';
+        }
+        shadow.querySelectorAll('.cb-reply-container').forEach(el => {
+          el.innerHTML = '';
+        });
+        refreshBoxModerationUI();
+        applyBoxStateToComposer();
+        showError(`Box updated. Action: ${action}`);
+        return;
+      }
+
+      const modMenuBtn = e.target.closest('.cb-mod-menu-btn');
+
+      if (modMenuBtn) {
+        const existingMenu = shadow.querySelector('.cb-mod-menu');
+
+        if (existingMenu) {
+          const existingCommentId = existingMenu.dataset.commentId;
+          existingMenu.remove();
+
+          if (existingCommentId === modMenuBtn.dataset.commentId) {
+            return;
+          }
+        }
+
+        const comment = findCommentById( modMenuBtn.dataset.commentId );
+        if (!comment) return;
+
+        modMenuBtn.insertAdjacentHTML(
+          'afterend',
+          renderCommentModerationMenu(comment)
+        );
+
+        return;
+      }
+
+      const lockCommentBtn = e.target.closest('.cb-lock-comment');
+
+      if (lockCommentBtn) {
+        if (!(await requireAuth())) return;
+
+        const commentId = lockCommentBtn.dataset.commentId;
+
+        const res = await authFetch(
+          `${API_URL}/api/v1/dashboard/moderation/${siteId}/comments/${commentId}/lock`,
+          { method: 'PUT' }
+        );
+
+        if (!res.ok) {
+          showError('Failed to update comment lock.');
+          return;
+        }
+
+        showError('Comment updated.');
+        shadow.querySelector('.cb-mod-menu')?.remove();
+        await refreshCurrentComments();
+        return;
+      }
+
+      const pinCommentBtn = e.target.closest('.cb-pin-comment');
+
+      if (pinCommentBtn) {
+        if (!(await requireAuth())) return;
+
+        const commentId = pinCommentBtn.dataset.commentId;
+
+        const res = await authFetch(
+          `${API_URL}/api/v1/dashboard/moderation/${siteId}/comments/${commentId}/pin`,
+          { method: 'PUT' }
+        );
+
+        if (!res.ok) {
+          showError('Failed to update pinned comment.');
+          return;
+        }
+
+        showError('Comment updated.');
+        shadow.querySelector('.cb-mod-menu')?.remove();
+        await refreshCurrentComments();
+        return;
+      }
+
+      const modDeleteBtn = e.target.closest('.cb-mod-delete-comment');
+
+      if (modDeleteBtn) {
+        if (!(await requireAuth())) return;
+
+        const commentId = modDeleteBtn.dataset.commentId;
+
+        if (!confirm('Delete this comment?')) return;
+
+        const res = await authFetch(
+          `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`,
+          { method: 'DELETE' }
+        );
+
+        if (!res.ok) {
+          showError('Failed to delete comment.');
+          return;
+        }
+
+        commentById.delete(commentId);
+        allComments = allComments.filter(comment => comment.id !== commentId);
+        updateCommentTitle(Math.max(totalCommentCount - 1, 0));
+        modDeleteBtn.closest('.cb-comment')?.remove();
+
+        showError('Comment deleted.');
+        shadow.querySelector('.cb-mod-menu')?.remove();
+        return;
+      }
+
+      const muteUserBtn = e.target.closest('.cb-mute-user');
+
+      if (muteUserBtn) {
+        if (!(await requireAuth())) return;
+
+        const userId = muteUserBtn.dataset.userId;
+        const reason = prompt('Reason for muting this user?') || '';
+
+        const res = await authFetch(
+          `${API_URL}/api/v1/dashboard/moderation/${siteId}/mute/${userId}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: reason
+          }
+        );
+
+        if (!res.ok) {
+          showError('Failed to mute user.');
+          return;
+        }
+
+        showError('User muted.');
+        shadow.querySelector('.cb-mod-menu')?.remove();
+        return;
+      }
+
+      const menuBtn = e.target.closest( '.cb-comment-menu-btn' );
 
       if (menuBtn) {
         const existingMenu = shadow.querySelector('.cb-comment-menu');
@@ -440,10 +698,15 @@ import { renderCommentMenu } from './commentMenu.js';
           'true'
         );
 
+        const comment = findCommentById(
+          menuBtn.dataset.commentId
+        );
+
         menuBtn.insertAdjacentHTML(
           'afterend',
           renderCommentMenu(
-            menuBtn.dataset.commentId
+            menuBtn.dataset.commentId,
+            comment?.permissions || {}
           )
         );
 
@@ -514,47 +777,232 @@ import { renderCommentMenu } from './commentMenu.js';
         return;
       }
 
+      const editBtn = e.target.closest('.cb-edit-comment');
+
+      if (editBtn) {
+        if (!(await requireAuth())) return;
+
+        const commentId = editBtn.dataset.commentId;
+
+        const commentEl = editBtn.closest('.cb-comment');
+        const textEl = commentEl.querySelector('.cb-comment-text');
+
+        const comment = findCommentById(commentId);
+        const oldBody = comment?.body || textEl.textContent.trim();
+
+        shadow.querySelector('.cb-comment-menu')?.remove();
+
+        textEl.innerHTML = `
+          <div class="cb-edit-box">
+            <textarea class="cb-edit-input">${escapeHtml(oldBody)}</textarea>
+
+            <div class="cb-inline-actions">
+              <button
+                class="cb-edit-cancel"
+                data-comment-id="${commentId}"
+              >
+                Cancel
+              </button>
+
+              <button
+                class="cb-edit-save"
+                data-comment-id="${commentId}"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        `;
+
+        textEl.querySelector('.cb-edit-input')?.focus();
+
+        return;
+      }
+
+      const saveEditBtn = e.target.closest('.cb-edit-save');
+
+      if (saveEditBtn) {
+        if (!(await requireAuth())) return;
+
+        const commentId = saveEditBtn.dataset.commentId;
+        const commentEl = saveEditBtn.closest('.cb-comment');
+        const input = commentEl.querySelector('.cb-edit-input');
+
+        const body = input.value.trim();
+
+        if (!body) {
+          showError('Comment cannot be empty.');
+          return;
+        }
+
+        saveEditBtn.disabled = true;
+        saveEditBtn.textContent = 'Saving...';
+
+        try {
+          const res = await authFetch(
+            `${API_URL}/api/v1/widget/comments/${commentId}`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ body })
+            }
+          );
+
+          if (!res.ok) {
+            showError('Failed to edit comment.');
+            return;
+          }
+
+          const comment = findCommentById(commentId);
+
+          if (comment) {
+            comment.body = body;
+            indexComment(comment);
+          }
+
+          const textEl = commentEl.querySelector('.cb-comment-text');
+          textEl.innerHTML = escapeHtml(body);
+
+          showError('Comment updated.');
+        } catch (err) {
+          showError('Failed to edit comment.');
+          console.error('[ChatterBox] Edit failed:', err);
+        } finally {
+          saveEditBtn.disabled = false;
+          saveEditBtn.textContent = 'Save';
+        }
+
+        return;
+      }
+
+      const cancelEditBtn = e.target.closest('.cb-edit-cancel');
+
+      if (cancelEditBtn) {
+        const commentId = cancelEditBtn.dataset.commentId;
+        const commentEl = cancelEditBtn.closest('.cb-comment');
+        const textEl = commentEl.querySelector('.cb-comment-text');
+        const comment = findCommentById(commentId);
+
+        if (comment) {
+          textEl.innerHTML = escapeHtml(comment.body);
+        }
+        return;
+      }
+
+      const deleteBtn = e.target.closest('.cb-delete-comment');
+
+      if (deleteBtn) {
+        if (!(await requireAuth())) return;
+
+        const commentId = deleteBtn.dataset.commentId;
+
+        const confirmed = confirm('Delete this comment?');
+
+        if (!confirmed) return;
+
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = 'Deleting...';
+
+        try {
+          const res = await authFetch(
+            `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`,
+            {
+              method: 'DELETE'
+            }
+          );
+
+          if (!res.ok) {
+            showError('Failed to delete comment.');
+            return;
+          }
+
+          const commentEl = deleteBtn.closest('.cb-comment');
+
+          commentEl?.remove();
+
+          commentById.delete(commentId);
+
+          allComments = allComments.filter(
+            comment => comment.id !== commentId
+          );
+
+          shadow.querySelector('.cb-comment-menu')?.remove();
+
+          showError('Comment deleted.');
+        } catch (err) {
+          showError('Failed to delete comment.');
+          console.error('[ChatterBox] Delete failed:', err);
+        }
+
+        return;
+      }
+
 
       const reactionBtn = e.target.closest('.cb-reaction-btn');
 
       if (reactionBtn) {
         if (!(await requireAuth())) return;
-
         const commentId = reactionBtn.dataset.commentId;
-        const emoji = reactionBtn.dataset.emoji;
+        const reactionType = reactionBtn.dataset.reactionType;
         reactionBtn.disabled = true;
+
         try {
-          await authFetch(
+          const res = await authFetch(
             `${API_URL}/api/v1/widget/comments/${commentId}/reactions`,
             {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ emoji })
+              body: JSON.stringify({ reactionType })
             }
           );
-          const countSpan = reactionBtn.querySelector('span');
 
-          if (countSpan) {
-            countSpan.textContent = Number(countSpan.textContent) + 1;
-          } else {
-            reactionBtn.insertAdjacentHTML(
-              'beforeend',
-              '<span>1</span>'
+          if (!res.ok) {
+            showError('Failed to add reaction. Please try again.');
+            return;
+          }
+          const updatedReaction = await res.json();
+          updateReactionButton( reactionBtn, updatedReaction );
+          const comment = findCommentById(commentId);
+          if (comment) {
+            const reactions = comment.reactions || [];
+            const existing = reactions.find(
+              r => r.reactionType === updatedReaction.reactionType
             );
+
+            if (existing) {
+              existing.count = updatedReaction.count;
+              existing.reacted = updatedReaction.reacted;
+            } else {
+              reactions.push(updatedReaction);
+            }
+
+            comment.reactions = reactions;
+            indexComment(comment);
           }
         } catch (err) {
-          reactionBtn.disabled = false;
           showError('Failed to add reaction. Please try again.');
           console.error('[ChatterBox] Failed to react:', err);
-        } 
+        } finally {
+          reactionBtn.disabled = false;
+        }
         return;
       }
 
       const replyBtn = e.target.closest('.cb-reply-btn');
 
       if (replyBtn) {
+        if (currentBox?.locked || !currentBox?.active) {
+          showError(
+            !currentBox.active
+              ? 'This discussion is inactive.'
+              : 'This discussion is locked.'
+          );
+          return;
+        }
         if (!(await requireAuth())) return;
 
         const commentId = replyBtn.dataset.commentId;
@@ -627,6 +1075,14 @@ import { renderCommentMenu } from './commentMenu.js';
       const submitBtn = e.target.closest('.cb-inline-submit');
 
       if (submitBtn) {
+        if (currentBox?.locked || !currentBox?.active) {
+          showError(
+            !currentBox.active
+              ? 'This discussion is inactive.'
+              : 'This discussion is locked.'
+          );
+          return;
+        }
         if (!(await requireAuth())) return;
 
         const commentId = submitBtn.dataset.commentId;
@@ -640,6 +1096,20 @@ import { renderCommentMenu } from './commentMenu.js';
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Posting...';
+
+        let optimisticReplyId = null;
+
+        let repliesContainer = shadow.getElementById(`replies-${rootCommentId}`);
+
+        if (!repliesContainer) {
+          await openReplies(rootCommentId);
+          repliesContainer = shadow.getElementById(`replies-${rootCommentId}`);
+        }
+
+        optimisticReplyId = appendOptimisticReply(
+          rootCommentId,
+          body
+        );
 
         try {
           console.time('post');
@@ -664,6 +1134,16 @@ import { renderCommentMenu } from './commentMenu.js';
 
           // await refreshCurrentComments();
           const savedReply = await res.json();
+          if (optimisticReplyId) {
+            shadow.getElementById(optimisticReplyId)?.remove();
+          }
+          indexComment(savedReply);
+          const cachedReplies = repliesByParentId.get(rootCommentId) || [];
+          cachedReplies.push(savedReply);
+          repliesByParentId.set(
+            rootCommentId,
+            cachedReplies
+          );
           const parent = allComments.find(
             c => c.id === rootCommentId
           );
@@ -692,14 +1172,14 @@ import { renderCommentMenu } from './commentMenu.js';
             viewRepliesBtn.textContent =
               `View ${count} ${count === 1 ? 'reply' : 'replies'}`;
           }
-          const oldHtml = replyCache.get(rootCommentId) || '';
-          const newHtml = oldHtml + renderReply(savedReply, rootCommentId);
-          replyCache.set(rootCommentId, newHtml);
           if (replyContainer) {
             replyContainer.innerHTML = '';
           }
 
         } catch (err) {
+          if (optimisticReplyId) {
+            shadow.getElementById(optimisticReplyId)?.remove();
+          }
           showError('Failed to post reply. Please try again.');
           console.error(
             '[ChatterBox] Reply failed:',
@@ -762,12 +1242,22 @@ import { renderCommentMenu } from './commentMenu.js';
         return;
       }
 
-      if (!e.target.closest('.cb-comment-menu')) {
+      if (
+        !e.target.closest('.cb-comment-menu') &&
+        !e.target.closest('.cb-comment-menu-btn')
+      ) {
         shadow.querySelector('.cb-comment-menu')?.remove();
 
         shadow
           .querySelector('.cb-comment-menu-btn[aria-expanded="true"]')
           ?.setAttribute('aria-expanded', 'false');
+      }
+
+      if (
+        !e.target.closest('.cb-mod-menu') &&
+        !e.target.closest('.cb-mod-menu-btn')
+      ) {
+        shadow.querySelector('.cb-mod-menu')?.remove();
       }
     });
   }
@@ -792,12 +1282,16 @@ import { renderCommentMenu } from './commentMenu.js';
       if (!body) return;
       if (submitBtn.disabled) return;
 
-      if (!(await requireAuth())) return;
-      const hasFreshToken = await ensureFreshToken();
-      if (!hasFreshToken) {
-        showAuthModal();
+      if (currentBox?.locked || !currentBox?.active) {
+        showError(
+          !currentBox.active
+            ? 'This discussion is inactive.'
+            : 'This discussion is locked.'
+        );
+        applyBoxStateToComposer();
         return;
       }
+      if (!(await requireAuth())) return;
 
       const optimisticId = prependOptimisticComment(body);
       submitBtn.disabled = true;
@@ -822,10 +1316,9 @@ import { renderCommentMenu } from './commentMenu.js';
         shadow.getElementById(optimisticId)?.remove();
 
         const savedComment = await res.json();
+        indexComment(savedComment);
         allComments.unshift(savedComment);
-        const title = shadow.querySelector('.cb-title');
-        const count = allComments.length;
-        title.textContent = `Chatter · ${count} ${count === 1 ? 'comment' : 'comments'}`;
+        updateCommentTitle(totalCommentCount + 1);
         const commentsContainer = shadow.getElementById('cb-comments');
         commentsContainer.insertAdjacentHTML('afterbegin', renderComment(savedComment));
 
@@ -837,8 +1330,31 @@ import { renderCommentMenu } from './commentMenu.js';
       } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Comment';
+        applyBoxStateToComposer();
       }
     });
+  }
+
+  function updateReactionButton(button, reaction) {
+    button.classList.toggle(
+      'cb-reaction-active',
+      reaction.reacted
+    );
+
+    let span = button.querySelector('span');
+
+    if (reaction.count > 0) {
+      if (!span) {
+        button.insertAdjacentHTML(
+          'beforeend',
+          `<span>${reaction.count}</span>`
+        );
+      } else {
+        span.textContent = reaction.count;
+      }
+    } else {
+      span?.remove();
+    }
   }
 
   function prependOptimisticComment(body) {
@@ -867,12 +1383,47 @@ import { renderCommentMenu } from './commentMenu.js';
     return optimisticId;
   }
 
-  function getCurrentUsername() {
-    return decodeJwtPayload(config.token)?.preferred_username;
+  function appendOptimisticReply(rootCommentId, body) {
+    let repliesContainer =
+      shadow.getElementById(`replies-${rootCommentId}`);
+
+    if (!repliesContainer) return null;
+
+    const optimisticId =
+      `cb-pending-reply-${crypto.randomUUID()}`;
+
+    repliesContainer.insertAdjacentHTML(
+      'beforeend',
+      `
+        <div
+          id="${optimisticId}"
+          class="cb-comment cb-reply cb-comment-pending"
+        >
+          <div class="cb-avatar">Y</div>
+
+          <div class="cb-comment-body">
+            <div class="cb-comment-meta">
+              <span class="cb-username">You</span>
+              <span class="cb-timestamp">just now</span>
+            </div>
+
+            <div class="cb-comment-text">
+              ${escapeHtml(body)}
+            </div>
+          </div>
+        </div>
+      `
+    );
+
+    return optimisticId;
   }
 
-  function isOwnComment(comment) {
-    return comment.author?.username === getCurrentUsername();
+  function indexComment(comment) {
+    commentById.set(comment.id, comment);
+  }
+
+  function findCommentById(commentId) {
+    return commentById.get(commentId) || null;
   }
 
   async function loadRules() {
@@ -891,22 +1442,13 @@ import { renderCommentMenu } from './commentMenu.js';
     rulesList.innerHTML = rules.length
       ? rules.map(rule => `
           <div class="cb-rule">
-            <div class="cb-rule-title">${escapeHtml(rule.title)}</div>
+            <div class="cb-rule-title">${escapeHtml(rule.rule)}</div>
             <div class="cb-rule-description">${escapeHtml(rule.description || '')}</div>
           </div>
         `).join('')
       : '<div class="cb-empty">No site rules yet.</div>';
     
     
-  }
-
-  function authHeaders() {
-    if (!config.token) return {};
-    return { Authorization: `Bearer ${config.token}` };
-  }
-
-  function isAuthenticated() {
-    return Boolean(config.token);
   }
 
   async function requireAuth() {
@@ -1069,15 +1611,6 @@ import { renderCommentMenu } from './commentMenu.js';
   }
 
   async function authFetch(url, options = {}) {
-    console.log(
-      'token expiring?',
-      shouldRefreshToken(config.token)
-    );
-
-    console.log(
-      'token expired?',
-      isTokenExpired(config.token)
-    );
     const hasFreshToken = await ensureFreshToken();
 
     if (!hasFreshToken) {
@@ -1091,13 +1624,29 @@ import { renderCommentMenu } from './commentMenu.js';
       Date.now().toString()
     );
 
-    return fetch(url, {
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-        Authorization: `Bearer ${config.token}`
+    const request = () =>
+      fetch(url, {
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          Authorization: `Bearer ${config.token}`
+        }
+      });
+
+    let res = await request();
+
+    if (res.status === 401) {
+      const refreshed = await refreshAccessToken();
+
+      if (refreshed) {
+        res = await request();
+      } else {
+        clearAuthSession();
+        closeAuthModal();
       }
-    });
+    }
+
+    return res;
   }
 
   async function ensureFreshToken() {
@@ -1403,6 +1952,17 @@ import { renderCommentMenu } from './commentMenu.js';
       .cb-rule { padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; margin-bottom: 10px; background: rgba(255,255,255,.025); } 
       .cb-rule-title { font-size: 14px; font-weight: 600; color: #f8fafc; margin-bottom: 4px; } 
       .cb-rule-description { font-size: 13px; color: #94a3b8; line-height: 1.5; }
+      .cb-edit-box { display: flex; flex-direction: column; gap: 8px; } 
+      .cb-edit-input { width: 100%; min-height: 76px; resize: vertical; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); color: #f8fafc; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-family: inherit; outline: none; } 
+      .cb-edit-input:focus { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.04); } 
+      .cb-edit-save { background: #f3f4f6; color: #111827; border: none; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; } 
+      .cb-edit-cancel { background: transparent; border: 1px solid rgba(255,255,255,.08); color: #9ca3af; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+      .cb-reaction-active { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.24); color: #f8fafc; }
+      .cb-mod-menu, .cb-box-mod-actions { display: flex; flex-direction: column; gap: 4px; } 
+      .cb-mod-menu { position: absolute; right: 0; bottom: 32px; min-width: 180px; background: #181b22; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 6px; z-index: 60; box-shadow: 0 12px 32px rgba(0,0,0,.35); } 
+      .cb-mod-menu-btn { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: #cbd5e1; border-radius: 999px; padding: 5px 9px; font-size: 12px; cursor: pointer; } 
+      .cb-box-mod-action { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: #cbd5e1; border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; } 
+      .cb-danger-item { color: #fecaca; }
     `;
   }
 

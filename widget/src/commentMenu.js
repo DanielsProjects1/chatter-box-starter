@@ -7,19 +7,15 @@ export function renderCommentMenu(
       class="cb-comment-menu"
       data-comment-id="${commentId}"
     >
-      <button
-        class="cb-menu-item cb-report-comment"
-        data-comment-id="${commentId}"
-      >
-        Report
-      </button>
 
-      <button
-        class="cb-menu-item cb-copy-comment-link"
-        data-comment-id="${commentId}"
-      >
-        Copy link
-      </button>
+      ${permissions.canEdit ? `
+        <button
+          class="cb-menu-item cb-edit-comment"
+          data-comment-id="${commentId}"
+        >
+          Edit
+        </button>
+      ` : ''}
 
       ${permissions.canDelete ? `
         <button
@@ -30,32 +26,22 @@ export function renderCommentMenu(
         </button>
       ` : ''}
 
-      ${permissions.canLock ? `
+      ${permissions.canReport ? `
         <button
-          class="cb-menu-item cb-lock-comment"
+          class="cb-menu-item cb-report-comment"
           data-comment-id="${commentId}"
         >
-          Lock Comment
+          Report
         </button>
       ` : ''}
 
-      ${permissions.canMute ? `
-        <button
-          class="cb-menu-item cb-mute-user"
-          data-comment-id="${commentId}"
-        >
-          Mute User
-        </button>
-      ` : ''}
+      <button
+        class="cb-menu-item cb-copy-comment-link"
+        data-comment-id="${commentId}"
+      >
+        Copy link
+      </button>
 
-      ${permissions.canPin ? `
-        <button
-          class="cb-menu-item cb-pin-comment"
-          data-comment-id="${commentId}"
-        >
-          Pin Comment
-        </button>
-      ` : ''}
     </div>
   `;
 }
