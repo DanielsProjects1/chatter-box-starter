@@ -4,6 +4,7 @@ import com.DanielsProjects1.Chatter_Box_Starter.entities.Reaction;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.ReactionType;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,4 +24,9 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     List<Object[]> countReactionsByCommentIds(@Param("commentIds") List<UUID> commentIds);
     @Query("SELECT r.comment.id, r.reactionType FROM Reaction r WHERE r.comment.id IN :commentIds AND r.user.id = :userId")
     List<Object[]> findUserReactionsByCommentIds(@Param("commentIds") List<UUID> commentIds, @Param("userId") UUID userId);
+
+    long countByCommentIdAndReactionType(UUID commentId, ReactionType reactionType);
+    @Modifying
+    @Query("DELETE FROM Reaction r WHERE r.comment.id = :commentId")
+    void deleteByCommentId(@Param("commentId") UUID commentId);
 }

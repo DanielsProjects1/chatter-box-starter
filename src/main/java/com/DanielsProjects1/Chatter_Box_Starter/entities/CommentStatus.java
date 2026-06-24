@@ -5,5 +5,5 @@ import lombok.Getter;
 import lombok.Setter;
 
 public enum CommentStatus {
-    VISIBLE, HIDDEN, FLAGGED, DELETED
+    VISIBLE, HIDDEN, FLAGGED, DELETED, REMOVED
 }

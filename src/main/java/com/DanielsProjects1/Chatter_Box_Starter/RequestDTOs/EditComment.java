@@ -6,5 +6,5 @@ import java.util.UUID;
 
 @Data
 public class EditComment {
-    private String newBody;
+    private String body;
 }

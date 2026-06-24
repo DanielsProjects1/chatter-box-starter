@@ -16,6 +16,8 @@ public class CommentDTO {
     private UUID parentId;
     private Instant createdDate;
     private CommentStatus status;
+    private boolean isLocked;
+    private boolean isPinned;
     private List<ReactionDTO> reactions;
     private CommentPermissions permissions;
     private long replyCount;
@@ -24,10 +26,22 @@ public class CommentDTO {
         CommentDTO dto = new CommentDTO();
         dto.id = comment.getId();
         dto.body = comment.getBody();
-        dto.author = UserDTO.from(comment.getAuthor());
+        if (comment.getStatus() == CommentStatus.DELETED) {
+            dto.body = "[deleted]";
+            UserDTO deletedUser = new UserDTO();
+            deletedUser.setUsername("[deleted]");
+            deletedUser.setDisplayName("[deleted]");
+            dto.author = deletedUser;
+            permissions = new CommentPermissions(); // all false
+        } else {
+            dto.body = comment.getBody();
+            dto.author = UserDTO.from(comment.getAuthor());
+        }
         dto.parentId = comment.getParent() != null ? comment.getParent().getId() : null;
         dto.createdDate = comment.getCreatedAt();
         dto.status = comment.getStatus();
+        dto.isLocked = comment.isLocked();
+        dto.isPinned = comment.isPinned();
         dto.reactions = reactions;
         dto.permissions = permissions;
         dto.replyCount = replyCount;

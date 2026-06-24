@@ -28,21 +28,30 @@ public class ReactionService {
     }
 
     @Transactional
-    public void toggleReaction(UUID commentId, UUID userId, ReactionType reactionType) {
+    public ReactionDTO toggleReaction(UUID commentId, UUID userId, ReactionType reactionType) {
         Optional<Reaction> exists = reactionRepo.findByCommentIdAndUserIdAndReactionType(commentId, userId, reactionType);
+        boolean reacted;
         if (exists.isPresent()) {
             reactionRepo.delete(exists.get());
-            return;
+            reacted = false;
+        } else {
+            Comment comment = commentRepo.findById(commentId)
+                    .orElseThrow(() -> new RuntimeException("No such comment exists"));
+            User user = userRepo.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("No such user exists"));
+            Reaction reaction = new Reaction();
+            reaction.setComment(comment);
+            reaction.setUser(user);
+            reaction.setReactionType(reactionType);
+            reactionRepo.save(reaction);
+            reacted = true;
         }
-        Comment comment = commentRepo.findById(commentId)
-                .orElseThrow(() -> new RuntimeException("No such comment exists"));
-        User user = userRepo.findById(userId)
-                .orElseThrow(() -> new RuntimeException("No such user exists"));
-        Reaction reaction = new Reaction();
-        reaction.setComment(comment);
-        reaction.setUser(user);
-        reaction.setReactionType(reactionType);
-        reactionRepo.save(reaction);
+        long count = reactionRepo.countByCommentIdAndReactionType(commentId, reactionType);
+        ReactionDTO dto = new ReactionDTO();
+        dto.setReactionType(reactionType);
+        dto.setCount(count);
+        dto.setReacted(reacted);
+        return dto;
     }
 
     public List<ReactionDTO> getReactionsForComment(UUID commentId, UUID userId) {

@@ -88,13 +88,13 @@ public class WidgetController {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/{boxId}/comments/{commentId}")
+    @PatchMapping("/{boxId}/comments/{commentId}")
     public ResponseEntity<Void> updateComment(
             @PathVariable UUID commentId,
             @RequestBody EditComment newComment,
             Authentication authentication
     ) throws AccessDeniedException {
-        commentService.editComment(commentId, SecurityUtils.getUserId(authentication), newComment.getNewBody());
+        commentService.editComment(commentId, SecurityUtils.getUserId(authentication), newComment.getBody());
         return ResponseEntity.noContent().build();
     }
 
@@ -109,12 +109,11 @@ public class WidgetController {
     }
 
     @PostMapping("/comments/{commentId}/reactions")
-    public ResponseEntity<Void> toggleReaction(
+    public ResponseEntity<ReactionDTO> toggleReaction(
             @PathVariable UUID commentId,
             @RequestBody ToggleReactionRequest toggleReactionRequest,
             Authentication authentication
     ) {
-        reactionService.toggleReaction(commentId, SecurityUtils.getUserId(authentication), toggleReactionRequest.getReactionType());
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(reactionService.toggleReaction(commentId, SecurityUtils.getUserId(authentication), toggleReactionRequest.getReactionType()));
     }
 }

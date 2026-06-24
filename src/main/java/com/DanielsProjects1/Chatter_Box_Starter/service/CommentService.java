@@ -90,11 +90,24 @@ public class CommentService {
     public void deleteComment(UUID commentId, UUID userId) throws AccessDeniedException {
         Comment comment = commentRepo.findById(commentId).orElseThrow(() -> new RuntimeException("Comment to be deleted does not exist."));
         Site site = comment.getBox().getSite();
-        SiteMember member = siteMemberRepo.findByUserIdAndSiteId(userId, site.getId()).orElseThrow(() -> new RuntimeException("Site member not found."));
-        if (!comment.getAuthor().getId().equals(userId) && !site.getOwner().getId().equals(userId) && member.getRole() == SiteRole.USER) {
+        SiteMember member = siteMemberRepo.findByUserIdAndSiteId(userId, site.getId()).orElse(null);
+        boolean isAuthor = comment.getAuthor().getId().equals(userId);
+        boolean isOwner = site.getOwner().getId().equals(userId);
+        boolean isMod = member != null && member.getRole() == SiteRole.MODERATOR;
+        if (!isAuthor && !isMod && !isOwner) {
             throw new AccessDeniedException("You do not have permission to delete this comment.");
         }
-        commentRepo.delete(comment);
+
+        if (isAuthor && !isOwner && !isMod) {
+            comment.setBody("[deleted]");
+            comment.setStatus(CommentStatus.DELETED);
+        } else {
+            comment.setBody("[removed]");
+            comment.setStatus(CommentStatus.REMOVED);
+        }
+        comment.setLocked(true);
+        reactionRepo.deleteByCommentId(commentId);
+//        commentRepo.delete(comment);
     }
 
     @Transactional
