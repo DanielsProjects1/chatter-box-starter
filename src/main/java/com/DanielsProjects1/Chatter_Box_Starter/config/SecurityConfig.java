@@ -20,11 +20,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST,"/api/v1/widget/init").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/widget/*/comments").permitAll() // this allows anyone to see the comments in a box
-                        .requestMatchers(HttpMethod.GET, "/api/v1/widget/*/comments/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/widget/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/sites/*/rules").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/widget/comments/*/reactions").permitAll()
-
+                        .requestMatchers(HttpMethod.GET, "/api/v1/widget/boxes/*").authenticated()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

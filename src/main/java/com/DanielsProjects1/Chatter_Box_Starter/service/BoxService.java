@@ -58,6 +58,11 @@ public class BoxService {
         return BoxDTO.from(box, buildBoxPermissions(box, userId));
     }
 
+    public BoxDTO getBoxById(UUID boxId, UUID userId) {
+        Box box = boxRepo.findById(boxId).orElseThrow(() -> new RuntimeException("Box not found"));
+        return BoxDTO.from(box, buildBoxPermissions(box, userId));
+    }
+
     @Transactional
     public void shutBox(UUID boxId, UUID ownerId) throws AccessDeniedException {
         Box box = boxRepo.findById(boxId)

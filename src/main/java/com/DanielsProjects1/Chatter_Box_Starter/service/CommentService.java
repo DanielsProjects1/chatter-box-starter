@@ -89,6 +89,7 @@ public class CommentService {
     @Transactional
     public void deleteComment(UUID commentId, UUID userId) throws AccessDeniedException {
         Comment comment = commentRepo.findById(commentId).orElseThrow(() -> new RuntimeException("Comment to be deleted does not exist."));
+        if (comment.getStatus() != CommentStatus.VISIBLE && comment.getStatus() != CommentStatus.FLAGGED) return;
         Site site = comment.getBox().getSite();
         SiteMember member = siteMemberRepo.findByUserIdAndSiteId(userId, site.getId()).orElse(null);
         boolean isAuthor = comment.getAuthor().getId().equals(userId);
@@ -98,7 +99,7 @@ public class CommentService {
             throw new AccessDeniedException("You do not have permission to delete this comment.");
         }
 
-        if (isAuthor && !isOwner && !isMod) {
+        if (isAuthor) {
             comment.setBody("[deleted]");
             comment.setStatus(CommentStatus.DELETED);
         } else {
@@ -107,7 +108,7 @@ public class CommentService {
         }
         comment.setLocked(true);
         reactionRepo.deleteByCommentId(commentId);
-//        commentRepo.delete(comment);
+        commentRepo.save(comment);
     }
 
     @Transactional
@@ -165,18 +166,21 @@ public class CommentService {
 
     public Page<CommentDTO> getCommentsByBox(UUID boxId, int page, int size, UUID userId) {
         Box box = boxRepo.findById(boxId).orElseThrow(() -> new RuntimeException("Box not found."));
-        if (!box.isActive()) {
-            throw new RuntimeException("This box no longer exists");
-        }
         UUID siteId = box.getSite().getId();
         SiteMember member = userId != null ? siteMemberRepo.findByUserIdAndSiteId(userId, siteId).orElse(null) : null;
-        boolean isMuted = userId != null && mutedRecordRepo.isUserMuted(userId, siteId, Instant.now());
+        boolean isOwner = userId != null && box.getSite().getOwner().getId().equals(userId);
+        boolean isMod = member != null && member.getRole() == SiteRole.MODERATOR;
+        boolean canManageBox = isOwner || isMod;
 
+        boolean isMuted = userId != null && mutedRecordRepo.isUserMuted(userId, siteId, Instant.now());
         Sort sort = Sort.by(
                 Sort.Order.desc("pinned"),
                 Sort.Order.asc("createdAt")
         );
         Pageable pageable = PageRequest.of(page, size, sort);
+        if (!box.isActive() && !canManageBox) {
+            return Page.empty(PageRequest.of(page, size));
+        }
         Page<Comment> comments = commentRepo.findAllByBoxIdAndParentIsNull(boxId, pageable);
         List<UUID> authorIds = comments.getContent().stream()
                 .map(c -> c.getAuthor().getId())

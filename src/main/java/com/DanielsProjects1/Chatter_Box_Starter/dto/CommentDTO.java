@@ -25,25 +25,28 @@ public class CommentDTO {
     public static CommentDTO from(Comment comment, long replyCount, List<ReactionDTO> reactions, CommentPermissions permissions) {
         CommentDTO dto = new CommentDTO();
         dto.id = comment.getId();
-        dto.body = comment.getBody();
-        if (comment.getStatus() == CommentStatus.DELETED) {
-            dto.body = "[deleted]";
-            UserDTO deletedUser = new UserDTO();
-            deletedUser.setUsername("[deleted]");
-            deletedUser.setDisplayName("[deleted]");
-            dto.author = deletedUser;
-            permissions = new CommentPermissions(); // all false
+        boolean isDeleted = comment.getStatus() == CommentStatus.DELETED;
+        boolean isRemoved = comment.getStatus() == CommentStatus.REMOVED;
+        if (isDeleted || isRemoved) {
+            String label = isRemoved ? "[removed]" : "[deleted]";
+            dto.body = label;
+            UserDTO hiddenUser = new UserDTO();
+            hiddenUser.setUsername(label);
+            hiddenUser.setDisplayName(label);
+            dto.author = hiddenUser;
+            dto.reactions = List.of();
+            dto.permissions = new CommentPermissions();
         } else {
             dto.body = comment.getBody();
             dto.author = UserDTO.from(comment.getAuthor());
+            dto.reactions = reactions;
+            dto.permissions = permissions;
         }
         dto.parentId = comment.getParent() != null ? comment.getParent().getId() : null;
         dto.createdDate = comment.getCreatedAt();
         dto.status = comment.getStatus();
         dto.isLocked = comment.isLocked();
         dto.isPinned = comment.isPinned();
-        dto.reactions = reactions;
-        dto.permissions = permissions;
         dto.replyCount = replyCount;
         return dto;
     }

@@ -15,6 +15,7 @@ import com.DanielsProjects1.Chatter_Box_Starter.utils.SecurityUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,9 +43,25 @@ public class WidgetController {
             @RequestBody InitBoxRequest request,
             Authentication authentication
     ) {
-        UUID userId = authentication != null ? SecurityUtils.getUserId(authentication) : null;
+        UUID userId = null;
+        if (authentication != null
+                && authentication.isAuthenticated()
+                && !(authentication instanceof AnonymousAuthenticationToken)) {
+            userId = SecurityUtils.getUserId(authentication);
+        }
+        System.out.println("INIT AUTH = " + authentication);
+        System.out.println("INIT USER ID = " + userId);
         BoxDTO box = boxService.getBox(request.getSiteId(), request.getPageUrl(), userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(box);
+    }
+
+    @GetMapping("/boxes/{boxId}")
+    public ResponseEntity<BoxDTO> getBoxForCurrentUser(
+            @PathVariable UUID boxId,
+            Authentication authenticaiton
+    ) {
+        UUID userId = SecurityUtils.getUserId(authenticaiton);
+        return ResponseEntity.ok(boxService.getBoxById(boxId, userId));
     }
 
     @GetMapping("/{boxId}/comments")
