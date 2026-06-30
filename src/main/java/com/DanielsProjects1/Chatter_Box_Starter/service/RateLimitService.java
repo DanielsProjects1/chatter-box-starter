@@ -28,7 +28,7 @@ public class RateLimitService {
 //                3,
 //                Duration.ofMinutes(1)
 //        );
-        RateLimitResult result = new RateLimitResult(true, RateLimitType.GLOBAL, 3, 10, Duration.ofSeconds(10));
+        //RateLimitResult result = new RateLimitResult(true, RateLimitType.GLOBAL, 3, 10, Duration.ofSeconds(10));
         System.out.println(result.allowed());
         System.out.println(result.limitType());
     }

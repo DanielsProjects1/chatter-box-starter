@@ -86,7 +86,7 @@ public class WidgetController {
         return ResponseEntity.ok(commentService.getRepliesByComment(commentId, page, size, userId));
     }
 
-    @PostMapping("/{boxId}/comments")
+    @PostMapping("/site/{siteId}/boxes/{boxId}/comments")
     public ResponseEntity<CommentDTO> addChatter(
             @PathVariable UUID boxId,
             @RequestBody AddComment addComment,

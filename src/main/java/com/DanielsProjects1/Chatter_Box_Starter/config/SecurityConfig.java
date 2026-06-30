@@ -1,11 +1,13 @@
 package com.DanielsProjects1.Chatter_Box_Starter.config;
 
+import com.DanielsProjects1.Chatter_Box_Starter.filter.RateLimitFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -13,7 +15,10 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            RateLimitFilter rateLimitFilter
+    ) throws Exception {
         http
                 .cors(cors -> {})
                 .csrf(csrf -> csrf.disable())
@@ -27,7 +32,8 @@ public class SecurityConfig {
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(Customizer.withDefaults())
-                );
+                )
+                .addFilterAfter(rateLimitFilter, BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 }
