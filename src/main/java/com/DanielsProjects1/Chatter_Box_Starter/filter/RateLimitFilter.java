@@ -1,10 +1,7 @@
 package com.DanielsProjects1.Chatter_Box_Starter.filter;
 
 import com.DanielsProjects1.Chatter_Box_Starter.service.RateLimitService;
-import com.DanielsProjects1.Chatter_Box_Starter.utils.RateLimitResult;
-import com.DanielsProjects1.Chatter_Box_Starter.utils.RateLimitType;
-import com.DanielsProjects1.Chatter_Box_Starter.utils.RouteMatcher;
-import com.DanielsProjects1.Chatter_Box_Starter.utils.SecurityUtils;
+import com.DanielsProjects1.Chatter_Box_Starter.utils.*;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -26,6 +24,7 @@ import java.util.regex.Pattern;
 public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimitService rateLimitService;
     private final RouteMatcher routeMatcher;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(
@@ -33,8 +32,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             HttpServletResponse res,
             FilterChain chain
     ) throws ServletException, IOException {
-        String method = req.getMethod();
-        String path = req.getRequestURI();
+
         if (!routeMatcher.isCommentPost(req)) {
             chain.doFilter(req, res);
             return;
@@ -48,9 +46,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
         UUID userId = SecurityUtils.getUserId(auth);
         UUID siteId = routeMatcher.extractSiteIdFromCommentPost(req);
         RateLimitResult globalResult = rateLimitService.allow(
-                "rl:comment:global:user" + userId,
-                100,
-                Duration.ofMinutes(10),
+                RateLimitKeys.globalComment(userId),
+                RateLimits.GLOBAL_COMMENT_LIMIT,
+                RateLimits.COMMENT_WINDOW,
                 RateLimitType.GLOBAL
         );
         if (!globalResult.allowed()) {
@@ -58,9 +56,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
         RateLimitResult siteResult = rateLimitService.allow(
-                "rl:comment:site:" + siteId + ":userId:" + userId,
-                30,
-                Duration.ofMinutes(10),
+                RateLimitKeys.siteComment(siteId, userId),
+                RateLimits.SITE_COMMENT_LIMIT,
+                RateLimits.COMMENT_WINDOW,
                 RateLimitType.SITE
         );
         if (!siteResult.allowed()) {
@@ -75,19 +73,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         res.setStatus(429);
         res.setContentType("application/json");
         res.setHeader("Retry-After", String.valueOf(retryAfterSeconds));
-        res.getWriter().write("""
-                {
-                  "error": "Too many requests. Please slow down.",
-                  "limitType": "%s",
-                  "currentCount": %d,
-                  "limit": %d,
-                  "retryAfterSeconds": %d
-                }
-                """.formatted(
+        RateLimitErrorResponse body = new RateLimitErrorResponse(
+                "Too many requests. Please slow down.",
                 result.limitType(),
                 result.currentCount(),
                 result.limit(),
                 retryAfterSeconds
-        ));
+        );
+        objectMapper.writeValue(res.getOutputStream(), body);
     }
 }

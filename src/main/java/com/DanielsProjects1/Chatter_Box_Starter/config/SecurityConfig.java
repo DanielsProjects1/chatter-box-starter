@@ -27,6 +27,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,"/api/v1/widget/init").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/widget/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/sites/*/rules").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/widget/gifs/search").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/widget/boxes/*").authenticated()
                         .anyRequest().authenticated()
                 )

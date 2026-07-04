@@ -22,14 +22,4 @@ public class RateLimitService {
         return new RateLimitResult(count <= limit, limitType, count, limit, retryAfter);
     }
 
-    public void testRedis() {
-//        RateLimitResult allowed = allow(
-//                "r1:test:user:123",
-//                3,
-//                Duration.ofMinutes(1)
-//        );
-        //RateLimitResult result = new RateLimitResult(true, RateLimitType.GLOBAL, 3, 10, Duration.ofSeconds(10));
-        System.out.println(result.allowed());
-        System.out.println(result.limitType());
-    }
 }

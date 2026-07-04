@@ -1,15 +1,12 @@
 package com.DanielsProjects1.Chatter_Box_Starter.controller;
 
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.*;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentReportDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.ReactionDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.Box;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.Comment;
+import com.DanielsProjects1.Chatter_Box_Starter.dto.*;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentReport;
+import com.DanielsProjects1.Chatter_Box_Starter.giphy.GifResult;
 import com.DanielsProjects1.Chatter_Box_Starter.service.BoxService;
 import com.DanielsProjects1.Chatter_Box_Starter.service.CommentService;
+import com.DanielsProjects1.Chatter_Box_Starter.giphy.GifSearchService;
 import com.DanielsProjects1.Chatter_Box_Starter.service.ReactionService;
 import com.DanielsProjects1.Chatter_Box_Starter.utils.SecurityUtils;
 import org.springframework.data.domain.Page;
@@ -20,7 +17,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.file.AccessDeniedException;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,11 +27,13 @@ public class WidgetController {
     private BoxService boxService;
     private CommentService commentService;
     private ReactionService reactionService;
+    private final GifSearchService gifSearchService;
 
-    public WidgetController(BoxService boxService, CommentService commentService, ReactionService reactionService) {
+    public WidgetController(BoxService boxService, CommentService commentService, ReactionService reactionService, GifSearchService gifSearchService) {
         this.boxService = boxService;
         this.commentService = commentService;
         this.reactionService = reactionService;
+        this.gifSearchService = gifSearchService;
     }
 
     @PostMapping("/init")
@@ -86,13 +84,13 @@ public class WidgetController {
         return ResponseEntity.ok(commentService.getRepliesByComment(commentId, page, size, userId));
     }
 
-    @PostMapping("/site/{siteId}/boxes/{boxId}/comments")
+    @PostMapping("/sites/{siteId}/boxes/{boxId}/comments")
     public ResponseEntity<CommentDTO> addChatter(
             @PathVariable UUID boxId,
             @RequestBody AddComment addComment,
             Authentication authentication
     ) {
-        CommentDTO comment = commentService.addComment(addComment.getBody(), SecurityUtils.getUserId(authentication), addComment.getParentId(), boxId);
+        CommentDTO comment = commentService.addComment(addComment, SecurityUtils.getUserId(authentication), boxId);
         return ResponseEntity.status(HttpStatus.CREATED).body(comment);
     }
 
@@ -111,7 +109,7 @@ public class WidgetController {
             @RequestBody EditComment newComment,
             Authentication authentication
     ) throws AccessDeniedException {
-        commentService.editComment(commentId, SecurityUtils.getUserId(authentication), newComment.getBody());
+        commentService.editComment(commentId, SecurityUtils.getUserId(authentication), newComment);
         return ResponseEntity.noContent().build();
     }
 
@@ -132,5 +130,10 @@ public class WidgetController {
             Authentication authentication
     ) {
         return ResponseEntity.ok(reactionService.toggleReaction(commentId, SecurityUtils.getUserId(authentication), toggleReactionRequest.getReactionType()));
+    }
+
+    @GetMapping("/gifs/search")
+    public ResponseEntity<List<GifResult>> search(@RequestParam String q) {
+        return ResponseEntity.ok(gifSearchService.search(q));
     }
 }

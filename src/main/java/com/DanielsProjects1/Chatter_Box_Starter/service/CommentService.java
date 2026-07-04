@@ -1,5 +1,7 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
+import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.AddComment;
+import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.EditComment;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentPermissions;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentReportDTO;
@@ -30,8 +32,9 @@ public class CommentService {
     private SiteRuleRepository siteRuleRepo;
     private MutedRecordRepository mutedRecordRepo;
     private ReactionRepository reactionRepo;
+    private final GifValidationService gifValidationService;
 
-    public CommentService(CommentRepository commentRepo, BoxRepository boxRepo, UserRepository userRepo, SiteMemberRepository siteMemberRepo, SiteRepository siteRepo, CommentReportRepository commentReportRepo, SiteRuleRepository siteRuleRepo, MutedRecordRepository mutedRecordRepo, ReactionRepository reactionRepo) {
+    public CommentService(CommentRepository commentRepo, BoxRepository boxRepo, UserRepository userRepo, SiteMemberRepository siteMemberRepo, SiteRepository siteRepo, CommentReportRepository commentReportRepo, SiteRuleRepository siteRuleRepo, MutedRecordRepository mutedRecordRepo, ReactionRepository reactionRepo, GifValidationService gifValidationService) {
         this.commentRepo = commentRepo;
         this.boxRepo = boxRepo;
         this.userRepo = userRepo;
@@ -41,10 +44,11 @@ public class CommentService {
         this.siteRuleRepo = siteRuleRepo;
         this.mutedRecordRepo = mutedRecordRepo;
         this.reactionRepo = reactionRepo;
+        this.gifValidationService = gifValidationService;
     }
 
     @Transactional
-    public CommentDTO addComment(String body, UUID userId, UUID parentCommentId, UUID boxId) {
+    public CommentDTO addComment(AddComment req, UUID userId, UUID boxId) {
         Box box = boxRepo.findById(boxId).orElseThrow(() -> new RuntimeException("No box found for this comment."));
         if (box.isLocked()) {
             throw new RuntimeException("This box has been closed. You can not add any comments to it");
@@ -54,15 +58,31 @@ public class CommentService {
         }
         User author = userRepo.findById(userId).orElseThrow(() -> new RuntimeException("User not found."));
         Comment parent = null;
+
+        UUID parentCommentId = req.getParentId();
         if (parentCommentId != null) {
             parent = commentRepo.findById(parentCommentId).orElseThrow(() -> new RuntimeException("Parent comment not found."));
             if (parent.isLocked()) {
                 throw new RuntimeException("This comment is locked.");
             }
+            if (parent.getStatus() == CommentStatus.DELETED ||
+                    parent.getStatus() == CommentStatus.REMOVED) {
+                throw new RuntimeException("You cannot reply to a deleted comment.");
+            }
         }
+
         Site site = box.getSite();
         if (mutedRecordRepo.isUserMuted(userId, site.getId(), Instant.now())) {
             throw new RuntimeException("You are muted on this site.");
+        }
+        String body = req.normalizedBody();
+        boolean hasText = !body.isBlank();
+        boolean hasGif = req.hasGif();
+        if (!hasText && !hasGif) {
+            throw new RuntimeException("Comment must contain text or a GIF.");
+        }
+        if (hasGif) {
+            gifValidationService.validate(req);
         }
         boolean doesMemberExist = siteMemberRepo.existsByUserIdAndSiteId(userId, site.getId());
         if (!doesMemberExist) {
@@ -76,6 +96,13 @@ public class CommentService {
         comment.setBody(body);
         comment.setAuthor(author);
         comment.setParent(parent);
+        if (hasGif) {
+            comment.setGifUrl(req.getGifUrl());
+            comment.setGifPreviewUrl(req.getGifPreviewUrl());
+            comment.setGifProvider(req.getGifProvider());
+            comment.setGifProviderId(req.getGifProviderId());
+            comment.setGifTitle(req.getGifTitle());
+        }
         commentRepo.save(comment);
         CommentPermissions permissions = new CommentPermissions();
         permissions.setCanEdit(true);
@@ -112,7 +139,7 @@ public class CommentService {
     }
 
     @Transactional
-    public void editComment(UUID commentId, UUID userId, String body) throws AccessDeniedException {
+    public void editComment(UUID commentId, UUID userId, EditComment req) throws AccessDeniedException {
         Comment comment = commentRepo.findById(commentId).orElseThrow(() -> new RuntimeException("The comment you are trying to edit does not exist."));
         if (!comment.getAuthor().getId().equals(userId)) {
             throw new AccessDeniedException("You cannot edit a comment that is not your own.");
@@ -121,7 +148,33 @@ public class CommentService {
         if (mutedRecordRepo.isUserMuted(userId, site.getId(), Instant.now())) {
             throw new RuntimeException("You are muted on this site.");
         }
-        comment.setBody(body);
+        if (comment.getStatus() == CommentStatus.DELETED ||
+                comment.getStatus() == CommentStatus.REMOVED) {
+            throw new RuntimeException("You cannot edit a deleted comment.");
+        }
+        String body = req.normalizedBody();
+        boolean bodyProvided = req.hasBodyPatch();
+        boolean hasNewText = bodyProvided && !body.isBlank();
+        boolean hasExistingText = comment.getBody() != null && !comment.getBody().isBlank();
+        boolean hasGif = req.hasGif();
+        boolean hasExistingGif = comment.getGifUrl() != null && !comment.getGifUrl().isBlank();
+        boolean willHaveGif = req.isRemoveGif() ? false : (hasGif || hasExistingGif);
+        boolean willHaveText = bodyProvided ? hasNewText : hasExistingText;
+        if (!willHaveText && !willHaveGif) {
+            throw new RuntimeException("Comment must contain text or a GIF.");
+        }
+        if (hasGif) gifValidationService.validate(req);
+        if (bodyProvided) comment.setBody(body);
+
+        if (req.isRemoveGif()) {
+            clearGif(comment);
+        } else if (hasGif) {
+            comment.setGifUrl(req.getGifUrl());
+            comment.setGifPreviewUrl(req.getGifPreviewUrl());
+            comment.setGifProvider(req.getGifProvider());
+            comment.setGifProviderId(req.getGifProviderId());
+            comment.setGifTitle(req.getGifTitle());
+        }
         commentRepo.save(comment);
     }
 
@@ -394,4 +447,11 @@ public class CommentService {
         return permissions;
     }
 
+    private void clearGif(Comment comment) {
+        comment.setGifUrl(null);
+        comment.setGifPreviewUrl(null);
+        comment.setGifProvider(null);
+        comment.setGifProviderId(null);
+        comment.setGifTitle(null);
+    }
 }

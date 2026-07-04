@@ -12,6 +12,11 @@ import java.util.UUID;
 public class CommentDTO {
     private UUID id;
     private String body;
+    private String gifUrl;
+    private String gifPreviewUrl;
+    private String gifProvider;
+    private String gifProviderId;
+    private String gifTitle;
     private UserDTO author;
     private UUID parentId;
     private Instant createdDate;
@@ -34,10 +39,20 @@ public class CommentDTO {
             hiddenUser.setUsername(label);
             hiddenUser.setDisplayName(label);
             dto.author = hiddenUser;
+            dto.gifUrl = null;
+            dto.gifPreviewUrl = null;
+            dto.gifProvider = null;
+            dto.gifProviderId = null;
+            dto.gifTitle = null;
             dto.reactions = List.of();
             dto.permissions = new CommentPermissions();
         } else {
             dto.body = comment.getBody();
+            dto.gifUrl = comment.getGifUrl();
+            dto.gifPreviewUrl = comment.getGifPreviewUrl();
+            dto.gifProvider = comment.getGifProvider();
+            dto.gifProviderId = comment.getGifProviderId();
+            dto.gifTitle = comment.getGifTitle();
             dto.author = UserDTO.from(comment.getAuthor());
             dto.reactions = reactions;
             dto.permissions = permissions;

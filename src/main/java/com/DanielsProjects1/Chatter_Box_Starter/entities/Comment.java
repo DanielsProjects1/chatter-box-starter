@@ -35,6 +35,21 @@ public class Comment {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String body;
 
+    @Column(length = 500)
+    private String gifUrl;
+
+    @Column(length = 500)
+    private String gifPreviewUrl;
+
+    @Column(length = 50)
+    private String gifProvider;
+
+    @Column(length = 100)
+    private String gifProviderId;
+
+    @Column(length = 255)
+    private String gifTitle;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CommentStatus status = CommentStatus.VISIBLE;

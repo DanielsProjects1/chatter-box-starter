@@ -10,6 +10,7 @@ import com.DanielsProjects1.Chatter_Box_Starter.repo.BoxRepository;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.CommentRepository;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteMemberRepository;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteRepository;
+import com.DanielsProjects1.Chatter_Box_Starter.utils.CachedBox;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,16 +21,18 @@ import java.util.UUID;
 @Service
 public class BoxService {
 
-    private BoxRepository boxRepo;
-    private SiteRepository siteRepo;
-    private CommentRepository commentRepo;
-    private SiteMemberRepository siteMemberRepo;
+    private final BoxRepository boxRepo;
+    private final SiteRepository siteRepo;
+    private final CommentRepository commentRepo;
+    private final SiteMemberRepository siteMemberRepo;
+    private final BoxCacheService boxCacheService;
 
-    public BoxService(BoxRepository boxRepo, SiteRepository siteRepo, CommentRepository commentRepo, SiteMemberRepository siteMemberRepo) {
+    public BoxService(BoxRepository boxRepo, SiteRepository siteRepo, CommentRepository commentRepo, SiteMemberRepository siteMemberRepo, BoxCacheService boxCacheService) {
         this.boxRepo = boxRepo;
         this.siteRepo = siteRepo;
         this.commentRepo = commentRepo;
         this.siteMemberRepo = siteMemberRepo;
+        this.boxCacheService = boxCacheService;
     }
 
     @Transactional
@@ -53,8 +56,17 @@ public class BoxService {
 
     @Transactional
     public BoxDTO getBox(UUID siteId, String pageUrl, UUID userId) {
-        Optional<Box> boxExists = boxRepo.findBySiteIdAndPageUrl(siteId, pageUrl);
-        Box box = boxExists.orElseGet(() -> createBox(siteId, pageUrl));
+        CachedBox cachedBox = boxCacheService.getCachedBox(siteId, pageUrl);
+        if (cachedBox != null) {
+            return BoxDTO.fromCached(
+                    cachedBox,
+                    buildBoxPermissions(cachedBox.siteId(), userId)
+            );
+        }
+        System.out.println("Looking up box in DB");
+        Box box = boxRepo.findBySiteIdAndPageUrl(siteId, pageUrl)
+                .orElseGet(() -> createBox(siteId, pageUrl));
+        boxCacheService.cacheBox(siteId, pageUrl, box);
         return BoxDTO.from(box, buildBoxPermissions(box, userId));
     }
 
@@ -113,10 +125,17 @@ public class BoxService {
     }
 
     private BoxPermissions buildBoxPermissions(Box box, UUID userId) {
+        return buildBoxPermissions(box.getSite().getId(), userId);
+    }
+
+    private BoxPermissions buildBoxPermissions(UUID siteId, UUID userId) {
         if (userId == null) return new BoxPermissions();
-        SiteMember member = siteMemberRepo.findByUserIdAndSiteId(userId, box.getSite().getId())
+        Site site = siteRepo.findById(siteId)
+                .orElseThrow(() -> new RuntimeException("Site not found."));
+        SiteMember member = siteMemberRepo
+                .findByUserIdAndSiteId(userId, siteId)
                 .orElse(null);
-        boolean isOwner = box.getSite().getOwner().getId().equals(userId);
+        boolean isOwner = site.getOwner().getId().equals(userId);
         boolean isModerator = member != null && member.getRole() == SiteRole.MODERATOR;
         BoxPermissions permissions = new BoxPermissions();
         permissions.setCanToggleBox(isOwner || isModerator);
