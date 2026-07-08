@@ -2,15 +2,10 @@ package com.DanielsProjects1.Chatter_Box_Starter.service;
 
 import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxPermissions;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.Box;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.Site;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.SiteMember;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.SiteRole;
-import com.DanielsProjects1.Chatter_Box_Starter.repo.BoxRepository;
-import com.DanielsProjects1.Chatter_Box_Starter.repo.CommentRepository;
-import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteMemberRepository;
-import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteRepository;
+import com.DanielsProjects1.Chatter_Box_Starter.entities.*;
+import com.DanielsProjects1.Chatter_Box_Starter.repo.*;
 import com.DanielsProjects1.Chatter_Box_Starter.utils.CachedBox;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class BoxService {
 
     private final BoxRepository boxRepo;
@@ -26,14 +22,16 @@ public class BoxService {
     private final CommentRepository commentRepo;
     private final SiteMemberRepository siteMemberRepo;
     private final BoxCacheService boxCacheService;
+    private final ReactionRepository reactionRepo;
+    private final CommentReportRepository commentReportRepo;
 
-    public BoxService(BoxRepository boxRepo, SiteRepository siteRepo, CommentRepository commentRepo, SiteMemberRepository siteMemberRepo, BoxCacheService boxCacheService) {
-        this.boxRepo = boxRepo;
-        this.siteRepo = siteRepo;
-        this.commentRepo = commentRepo;
-        this.siteMemberRepo = siteMemberRepo;
-        this.boxCacheService = boxCacheService;
-    }
+//    public BoxService(BoxRepository boxRepo, SiteRepository siteRepo, CommentRepository commentRepo, SiteMemberRepository siteMemberRepo, BoxCacheService boxCacheService) {
+//        this.boxRepo = boxRepo;
+//        this.siteRepo = siteRepo;
+//        this.commentRepo = commentRepo;
+//        this.siteMemberRepo = siteMemberRepo;
+//        this.boxCacheService = boxCacheService;
+//    }
 
     @Transactional
     public Box createBox(UUID siteId, String pageUrl) {
@@ -107,7 +105,10 @@ public class BoxService {
         if (!site.getOwner().getId().equals(ownerId)) {
             throw new AccessDeniedException("You do not have permission to empty this box.");
         }
-        commentRepo.deleteAllByBoxId(box.getId());
+        reactionRepo.deleteByBoxId(boxId);
+        commentReportRepo.deleteByBoxId(boxId);
+        commentRepo.deleteRepliesByBoxId(boxId);
+        commentRepo.deleteRootCommentsByBoxId(boxId);
 
     }
 

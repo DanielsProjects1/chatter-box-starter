@@ -5,6 +5,7 @@ import com.DanielsProjects1.Chatter_Box_Starter.entities.ReportAction;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,4 +23,8 @@ public interface CommentReportRepository extends JpaRepository<CommentReport, UU
             @Param("actionTaken") ReportAction actionTaken,
             Pageable pageable
     );
+
+    @Modifying
+    @Query("DELETE FROM CommentReport r WHERE r.comment.box.id = :boxId")
+    void deleteByBoxId(@Param("boxId") UUID boxId);
 }

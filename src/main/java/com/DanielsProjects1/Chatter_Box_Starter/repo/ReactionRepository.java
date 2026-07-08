@@ -29,4 +29,8 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     @Modifying
     @Query("DELETE FROM Reaction r WHERE r.comment.id = :commentId")
     void deleteByCommentId(@Param("commentId") UUID commentId);
+
+    @Modifying
+    @Query("DELETE FROM Reaction r WHERE r.comment.box.id = :boxId")
+    void deleteByBoxId(@Param("boxId") UUID boxId);
 }
