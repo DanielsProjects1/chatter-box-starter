@@ -65,17 +65,48 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   let allComments = [];
   let rulesLoaded = false;
   let cachedRules = [];
+  let selectedGif = null;
+  let editSelectedGif = null;
+  let editRemoveGif = false;
+  let originalEditGif = null;
+  let activeEditCommentId = null;
+  let replySelectedGif = null;
+  let activeReplyCommentId = null;
   const commentById = new Map();
   // Initialize the widget
   async function init() {
     const pageUrl = window.location.pathname;
+
     try {
-      const res = await fetch(`${API_URL}/api/v1/widget/init`, {
+      const headers = { 'Content-Type': 'application/json' };
+      if (config.token) {
+        const fresh = await ensureFreshToken();
+        if (fresh) {
+          headers.Authorization = `Bearer ${config.token}`;
+        }
+      }
+      let res = await fetch(`${API_URL}/api/v1/widget/init`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ siteId, pageUrl })
       });
+      if (res.status === 401) {
+        clearAuthSession();
+
+        res = await fetch(`${API_URL}/api/v1/widget/init`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ siteId, pageUrl })
+        });
+      }
+      if (!res.ok) {
+        throw new Error(`Init failed: ${res.status}`);
+      }
       const box = await res.json();
+      console.log("init box", box);
+      console.log("box perms", box.permissions);
       render(box);
     } catch (err) {
       showError('Failed to initialize comments. Please refresh the page.');
@@ -100,6 +131,17 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           <span class="cb-title">Chatter</span>
           ${renderBoxModerationMenu(box)}
         </div>
+        ${!box.active ? `
+          <div class="cb-box-status">
+            <strong>This discussion is inactive.</strong>
+            <span>Log in as a moderator or site owner to reactivate it.</span>
+            ${!config.token ? `
+              <button class="cb-auth-login cb-box-login">
+                Log in
+              </button>
+            ` : ''}
+          </div>
+        ` : ''}
         <div id="cb-comments-panel">
           <div class="cb-composer">
             <textarea
@@ -108,8 +150,10 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
               rows="1"
               placeholder="Join the chatter..."
             ></textarea>
-
+            <div id="cb-selected-gif-preview"></div>
+            <div id="cb-gif-panel" class="cb-gif-panel-inline" style="display:none;"></div>
             <div class="cb-composer-footer">
+              <button type="button" id="cb-gif-btn" class="cb-gif-btn">GIF</button>
               <button class="cb-submit-btn" id="cb-submit-btn">
                 Comment
               </button>
@@ -141,19 +185,35 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   async function loadComments(boxId) {
+    console.log("Loading comments for box: ", boxId);
     try {
-      const res = await fetch(`${API_URL}/api/v1/widget/${boxId}/comments?page=${currentPage}&size=20`);
-      const data = await res.json();
-      totalCommentCount = data.totalElements || 0;
-      const loadMoreBtn = shadow.getElementById('cb-load-more');
+      const url = `${API_URL}/api/v1/widget/${boxId}/comments?page=${currentPage}&size=20`;
 
+      let headers = await getOptionalAuthHeaders();
+
+      let res = await fetch(url, { headers });
+
+      if (res.status === 401) {
+        clearAuthSession();
+        res = await fetch(url, { headers: {} });
+      }
+
+      if (!res.ok) {
+        throw new Error(`Failed to load comments: ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      totalCommentCount = data.totalElements || 0;
+
+      const loadMoreBtn = shadow.getElementById('cb-load-more');
       loadMoreBtn.style.display = data.last ? 'none' : 'block';
 
       allComments = currentPage === 0
         ? data.content || []
         : [...allComments, ...(data.content || [])];
 
-      renderComments(allComments, data.totalElements || 0);
+      renderComments(allComments, totalCommentCount);
     } catch (err) {
       showError('Failed to load comments. Please try again.');
       console.error('[ChatterBox] Failed to load comments:', err);
@@ -165,32 +225,31 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     const loadedPages = [];
     let totalCount = 0;
     let isLastPage = false;
+
+    const headers = await getOptionalAuthHeaders();
     for (let page = 0; page <= pageToRestore; page++) {
       const res = await fetch(
-        `${API_URL}/api/v1/widget/${currentBoxId}/comments?page=${page}&size=20`
+        `${API_URL}/api/v1/widget/${currentBoxId}/comments?page=${page}&size=20`,
+        { headers }
       );
+
+      if (!res.ok) {
+        throw new Error(`Failed to refresh comments: ${res.status}`);
+      }
+
       const data = await res.json();
+
       totalCount = data.totalElements || 0;
       isLastPage = data.last;
-      loadedPages.push(
-        ...(data.content || [])
-      );
+      loadedPages.push(...(data.content || []));
     }
 
     allComments = loadedPages;
 
-    const loadMoreBtn = shadow.getElementById(
-      'cb-load-more'
-    );
+    const loadMoreBtn = shadow.getElementById('cb-load-more');
+    loadMoreBtn.style.display = isLastPage ? 'none' : 'block';
 
-    loadMoreBtn.style.display = isLastPage
-      ? 'none'
-      : 'block';
-
-    renderComments(
-      allComments,
-      totalCount
-    );
+    renderComments(allComments, totalCount);
   }
 
   function renderComments(comments, totalCount) {
@@ -207,19 +266,28 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   function renderComment(comment) {
-    const initials = comment.author.displayName
-      ? comment.author.displayName.charAt(0).toUpperCase()
-      : '?';
-      console.log('comment replyCount:', comment.id, comment.replyCount);
+    const deleted = isDeletedComment(comment);
+    const displayName = deleted ? deletedLabel(comment) : comment.author.displayName || comment.author.username;
+    const initials = deleted ? deletedAvatarText(comment) : displayName.charAt(0).toUpperCase();
     return `
-      <div class="cb-comment ${comment.replyCount > 0 ? 'cb-has-replies' : ''}">
-        <div class="cb-avatar">${initials}</div>
+      <div class="cb-comment ${deleted ? 'cb-comment-deleted' : ''} ${comment.replyCount > 0 ? 'cb-has-replies' : ''}"
+      data-comment-root-id="${comment.id}">
+        <div class="cb-avatar ${deleted ? 'cb-avatar-deleted' : ''} ">${initials}</div>
         <div class="cb-comment-body">
           <div class="cb-comment-meta">
-            <span class="cb-username">${comment.author.displayName || comment.author.username}</span>
+            <span class="cb-username">${displayName}</span>
             <span class="cb-timestamp">${formatTime(comment.createdDate)}</span>
           </div>
-          <div class="cb-comment-text">${escapeHtml(comment.body)}</div>
+          <div class="cb-comment-text">${deleted ? deletedLabel(comment) : escapeHtml(comment.body)}</div>
+          ${comment.gifUrl ? `
+            <div class="cb-comment-gif">
+                <img
+                    src="${escapeHtml(comment.gifPreviewUrl || comment.gifUrl)}"
+                    alt="${escapeHtml(comment.gifTitle || 'GIF')}"
+                    loading="lazy">
+            </div>
+            ` : ''}
+          ${ !deleted ? `
           <div class="cb-comment-actions">
             <button
               class="cb-action-btn cb-reply-btn"
@@ -255,7 +323,22 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
                 Moderate
               </button>
             ` : ''}
+          </div>` : `
+          <div class="cb-comment-actions">
+            <span class="cb-deleted-note">
+              Comment unavailable
+            </span>
+            ${comment.replyCount > 0 ? `
+              <button
+                class="cb-action-btn cb-view-replies-btn"
+                data-comment-id="${comment.id}"
+              >
+                View ${comment.replyCount}
+                ${comment.replyCount === 1 ? 'reply' : 'replies'}
+              </button>
+            ` : ''}
           </div>
+          `}
           <div
             class="cb-reply-container"
             id="reply-container-${comment.id}"
@@ -325,7 +408,12 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       return;
     }
     const res = await fetch(
-      `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`
+      `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`,
+      {
+        headers: {
+          ...(config.token ? { Authorization: `Bearer ${config.token}` } : {})
+        }
+      }
     );
     const data = await res.json();
     const replies = data.content || [];
@@ -337,61 +425,76 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   function renderReply(reply, rootCommentId) {
-    const initials = reply.author.displayName
-      ? reply.author.displayName.charAt(0).toUpperCase()
-      : '?';
+    const deleted = isDeletedComment(reply);
+    const displayName = deleted
+      ? deletedLabel(reply)
+      : reply.author.displayName || reply.author.username;
 
-    const username = reply.author.displayName || reply.author.username;
+    const initials = deleted
+      ? deletedAvatarText(reply)
+      : displayName.charAt(0).toUpperCase();
 
     return `
-      <div class="cb-comment cb-reply">
-        <div class="cb-avatar">
+      <div class="cb-comment cb-reply ${deleted ? 'cb-comment-deleted' : ''} ${reply.replyCount > 0 ? 'cb-has-replies' : ''}"
+      data-comment-root-id="${reply.id}">
+        <div class="cb-avatar ${deleted ? 'cb-avatar-deleted' : ''}">
           ${initials}
         </div>
 
         <div class="cb-comment-body">
           <div class="cb-comment-meta">
-            <span class="cb-username">
-              ${username}
-            </span>
-            <span class="cb-timestamp">
-              ${formatTime(reply.createdDate)}
-            </span>
+            <span class="cb-username">${escapeHtml(displayName)}</span>
+            <span class="cb-timestamp">${formatTime(reply.createdDate)}</span>
           </div>
 
           <div class="cb-comment-text">
-            ${escapeHtml(reply.body)}
+            ${deleted ? deletedLabel(reply) : escapeHtml(reply.body)}
           </div>
-
-          <div class="cb-comment-actions">
-            <button
-              class="cb-action-btn cb-reply-btn"
-              data-comment-id="${reply.id}"
-              data-root-comment-id="${rootCommentId}"
-              data-reply-to="${escapeHtml(username)}"
-            >
-              Reply
-            </button>
-
-            <div class="cb-reactions">
-              ${renderReactions(reply)}
+          ${reply.gifUrl ? `
+            <div class="cb-comment-gif">
+                <img
+                    src="${escapeHtml(reply.gifPreviewUrl || reply.gifUrl)}"
+                    alt="${escapeHtml(reply.gifTitle || 'GIF')}"
+                    loading="lazy">
             </div>
-            <button
-              class="cb-comment-menu-btn"
-              data-comment-id="${reply.id}"
-              aria-expanded="false"
-            >
-              ⋯
-            </button>
-            ${hasCommentModActions(reply) ? `
-              <button
-                class="cb-mod-menu-btn"
-                data-comment-id="${reply.id}"
-              >
-                Moderate
-              </button>
             ` : ''}
-          </div>
+          ${!deleted ? `
+            <div class="cb-comment-actions">
+              <button
+                class="cb-action-btn cb-reply-btn"
+                data-comment-id="${reply.id}"
+                data-root-comment-id="${rootCommentId}"
+                data-reply-to="${escapeHtml(displayName)}"
+              >
+                Reply
+              </button>
+
+              <div class="cb-reactions">
+                ${renderReactions(reply)}
+              </div>
+
+              <button
+                class="cb-comment-menu-btn"
+                data-comment-id="${reply.id}"
+                aria-expanded="false"
+              >
+                ⋯
+              </button>
+
+              ${hasCommentModActions(reply) ? `
+                <button
+                  class="cb-mod-menu-btn"
+                  data-comment-id="${reply.id}"
+                >
+                  Moderate
+                </button>
+              ` : ''}
+            </div>
+          ` : `
+            <div class="cb-comment-actions">
+              <span class="cb-deleted-note">Comment unavailable</span>
+            </div>
+          `}
 
           <div
             class="cb-reply-container"
@@ -465,6 +568,12 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
   function attachGlobalEventDelegation() {
     shadow.addEventListener('click', async (e) => {
+      const boxLoginBtn = e.target.closest('.cb-box-login');
+      if (boxLoginBtn) {
+        //showAuthModal();
+        renderLoginForm(shadow);
+        return;
+      }
       const loadMoreBtn = e.target.closest('#cb-load-more');
 
       if (loadMoreBtn) {
@@ -496,6 +605,78 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         return;
       }
 
+      const gifBtn = e.target.closest('#cb-gif-btn');
+      if (gifBtn) {
+        toggleGifPanel('cb-gif-panel', 'composer');
+        return;
+      }
+
+      const gifResult = e.target.closest('.cb-gif-result');
+      if (gifResult) {
+        const gif = {
+          gifUrl: gifResult.dataset.gifUrl,
+          gifPreviewUrl: gifResult.dataset.gifPreviewUrl,
+          gifProvider: gifResult.dataset.gifProvider,
+          gifProviderId: gifResult.dataset.gifProviderId,
+          gifTitle: gifResult.dataset.gifTitle
+        };
+
+        const panel = gifResult.closest('.cb-gif-panel-inline');
+        const mode = panel?.dataset.mode || 'composer';
+        
+        if (mode === 'edit') {
+          editSelectedGif = gif;
+          editRemoveGif = false;
+          renderEditGifPreview(activeEditCommentId);
+          if (panel) panel.style.display = 'none';
+          shadow.querySelector('.cb-edit-input')?.focus();
+          return;
+        }
+        if (mode === 'reply') {
+          replySelectedGif = gif;
+          renderReplyGifPreview(activeReplyCommentId);
+
+          if (panel) panel.style.display = 'none';
+
+          shadow
+            .getElementById(`reply-container-${activeReplyCommentId}`)
+            ?.querySelector('.cb-inline-input')
+            ?.focus();
+
+          return;
+        }
+        selectedGif = gif;
+        renderSelectedGifPreview();
+        if (panel) panel.style.display = 'none';
+        shadow.getElementById('cb-input')?.focus();
+        return;
+      }
+
+      const removeGifBtn = e.target.closest('#cb-remove-selected-gif');
+      if (removeGifBtn) {
+        selectedGif = null;
+        renderSelectedGifPreview();
+      }
+
+      const removeReplyGifBtn = e.target.closest('.cb-remove-reply-gif');
+
+      if (removeReplyGifBtn) {
+        const commentId = removeReplyGifBtn.dataset.commentId;
+        replySelectedGif = null;
+        renderReplyGifPreview(commentId);
+        return;
+      }
+
+      const replyGifBtn = e.target.closest('.cb-reply-gif-btn');
+
+      if (replyGifBtn) {
+        const commentId = replyGifBtn.dataset.commentId;
+        activeReplyCommentId = commentId;
+
+        toggleGifPanel(`cb-reply-gif-panel-${commentId}`, 'reply');
+        return;
+      }
+
       const boxActionBtn = e.target.closest('.cb-box-mod-action');
 
       if (boxActionBtn) {
@@ -511,7 +692,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         }
 
         const res = await authFetch(
-          `${API_URL}/api/v1/widget/boxes/${currentBoxId}/${action}`,
+          `${API_URL}/api/v1/dashboard/moderation/boxes/${currentBoxId}/${action}`,
           { method: 'PUT' }
         );
 
@@ -541,13 +722,14 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         });
         refreshBoxModerationUI();
         applyBoxStateToComposer();
-        showError(`Box updated. Action: ${action}`);
+        showError(`Box updated. Action: ${action == 'deactivate' ? "activation toggle" : action}`);
         return;
       }
 
       const modMenuBtn = e.target.closest('.cb-mod-menu-btn');
 
       if (modMenuBtn) {
+        shadow.querySelector('.cb-comment-menu')?.remove();
         const existingMenu = shadow.querySelector('.cb-mod-menu');
 
         if (existingMenu) {
@@ -631,17 +813,14 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         );
 
         if (!res.ok) {
-          showError('Failed to delete comment.');
+          showError('Failed to remove comment.');
           return;
         }
 
-        commentById.delete(commentId);
-        allComments = allComments.filter(comment => comment.id !== commentId);
-        updateCommentTitle(Math.max(totalCommentCount - 1, 0));
-        modDeleteBtn.closest('.cb-comment')?.remove();
+        markCommentDeletedInUI(commentId, 'REMOVED');
 
-        showError('Comment deleted.');
         shadow.querySelector('.cb-mod-menu')?.remove();
+        showError('Comment removed.');
         return;
       }
 
@@ -675,6 +854,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       const menuBtn = e.target.closest( '.cb-comment-menu-btn' );
 
       if (menuBtn) {
+        shadow.querySelector('.cb-mod-menu')?.remove();
         const existingMenu = shadow.querySelector('.cb-comment-menu');
 
         const existingBtn = shadow.querySelector(
@@ -704,10 +884,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
         menuBtn.insertAdjacentHTML(
           'afterend',
-          renderCommentMenu(
-            menuBtn.dataset.commentId,
-            comment?.permissions || {}
-          )
+          renderCommentMenu(comment)
         );
 
         return;
@@ -783,38 +960,101 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         if (!(await requireAuth())) return;
 
         const commentId = editBtn.dataset.commentId;
-
+        activeEditCommentId = commentId;
         const commentEl = editBtn.closest('.cb-comment');
         const textEl = commentEl.querySelector('.cb-comment-text');
 
         const comment = findCommentById(commentId);
+        editSelectedGif = null;
+        editRemoveGif = false;
+        originalEditGif = comment?.gifUrl
+          ? {
+              gifUrl: comment.gifUrl,
+              gifPreviewUrl: comment.gifPreviewUrl,
+              gifProvider: comment.gifProvider,
+              gifProviderId: comment.gifProviderId,
+              gifTitle: comment.gifTitle
+            }
+          : null;
         const oldBody = comment?.body || textEl.textContent.trim();
 
         shadow.querySelector('.cb-comment-menu')?.remove();
 
         textEl.innerHTML = `
-          <div class="cb-edit-box">
-            <textarea class="cb-edit-input">${escapeHtml(oldBody)}</textarea>
+          <div class="cb-composer cb-edit-composer">
+            <textarea class="cb-input cb-edit-input">${escapeHtml(oldBody)}</textarea>
 
-            <div class="cb-inline-actions">
+            <div
+              class="cb-edit-gif-preview"
+              id="cb-edit-gif-preview-${commentId}"
+            ></div>
+
+            <div
+              id="cb-edit-gif-panel-${commentId}"
+              class="cb-gif-panel-inline"
+              style="display:none;"
+            ></div>
+
+            <div class="cb-composer-footer">
               <button
-                class="cb-edit-cancel"
+                type="button"
+                class="cb-gif-btn cb-edit-add-gif"
                 data-comment-id="${commentId}"
               >
-                Cancel
+                GIF
               </button>
 
-              <button
-                class="cb-edit-save"
-                data-comment-id="${commentId}"
-              >
-                Save
-              </button>
+              <div class="cb-inline-actions">
+                <button class="cb-edit-cancel" data-comment-id="${commentId}">
+                  Cancel
+                </button>
+
+                <button class="cb-edit-save" data-comment-id="${commentId}">
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         `;
+        renderEditGifPreview(commentId);
+        const editInput = textEl.querySelector('.cb-edit-input');
+        editInput?.focus();
+        if (editInput) {
+          editInput.style.height = 'auto';
+          editInput.style.height = `${Math.min(editInput.scrollHeight, 160)}px`;
+        }
+        editInput?.addEventListener('input', () => {
+          editInput.style.height = 'auto';
+          editInput.style.height = `${Math.min(editInput.scrollHeight, 160)}px`;
+        });
+        editInput?.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            textEl.querySelector('.cb-edit-save')?.click();
+          }
+        });
 
-        textEl.querySelector('.cb-edit-input')?.focus();
+        return;
+      }
+
+      const editAddGifBtn = e.target.closest('.cb-edit-add-gif');
+
+      if (editAddGifBtn) {
+        const commentId = editAddGifBtn.dataset.commentId;
+        activeEditCommentId = commentId;
+        toggleGifPanel(`cb-edit-gif-panel-${commentId}`, 'edit');
+        return;
+      }
+
+      const editRemoveGifBtn = e.target.closest('.cb-edit-remove-gif');
+
+      if (editRemoveGifBtn) {
+        editSelectedGif = null;
+        editRemoveGif = true;
+
+        const commentId = editRemoveGifBtn.dataset.commentId;
+        activeEditCommentId = commentId;
+        renderEditGifPreview(activeEditCommentId);
 
         return;
       }
@@ -829,41 +1069,79 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         const input = commentEl.querySelector('.cb-edit-input');
 
         const body = input.value.trim();
+        const comment = findCommentById(commentId);
 
-        if (!body) {
+        const hasText = body.length > 0;
+        const hasOriginalGif = !!originalEditGif;
+
+        const willHaveGif = editRemoveGif
+            ? !!editSelectedGif
+            : hasOriginalGif || !!editSelectedGif;
+
+        if (!hasText && !willHaveGif) {
           showError('Comment cannot be empty.');
           return;
         }
 
         saveEditBtn.disabled = true;
         saveEditBtn.textContent = 'Saving...';
-
+        const payload = {
+          body,
+          ...(editSelectedGif ? {
+            gifUrl: editSelectedGif.gifUrl,
+            gifPreviewUrl: editSelectedGif.gifPreviewUrl,
+            gifProvider: editSelectedGif.gifProvider,
+            gifProviderId: editSelectedGif.gifProviderId,
+            gifTitle: editSelectedGif.gifTitle
+          } : {}),
+          ...(editRemoveGif ? { removeGif: true } : {})
+        };
         try {
           const res = await authFetch(
-            `${API_URL}/api/v1/widget/comments/${commentId}`,
+            `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`,
             {
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json'
               },
-              body: JSON.stringify({ body })
+              body: JSON.stringify(payload)
             }
           );
 
           if (!res.ok) {
-            showError('Failed to edit comment.');
+            showError('Edit patch req failed.');
             return;
           }
 
-          const comment = findCommentById(commentId);
-
           if (comment) {
             comment.body = body;
+
+            if (editRemoveGif) {
+              comment.gifUrl = null;
+              comment.gifPreviewUrl = null;
+              comment.gifProvider = null;
+              comment.gifProviderId = null;
+              comment.gifTitle = null;
+            } else if (editSelectedGif) {
+              comment.gifUrl = editSelectedGif.gifUrl;
+              comment.gifPreviewUrl = editSelectedGif.gifPreviewUrl;
+              comment.gifProvider = editSelectedGif.gifProvider;
+              comment.gifProviderId = editSelectedGif.gifProviderId;
+              comment.gifTitle = editSelectedGif.gifTitle;
+            }
+
             indexComment(comment);
+            editSelectedGif = null;
+            editRemoveGif = false;
+            originalEditGif = null;
+            activeEditCommentId = null;
           }
 
-          const textEl = commentEl.querySelector('.cb-comment-text');
-          textEl.innerHTML = escapeHtml(body);
+          // const textEl = commentEl.querySelector('.cb-comment-text');
+          // textEl.innerHTML = escapeHtml(body);
+          commentEl.outerHTML = comment.parentId
+            ? renderReply(comment, comment.parentId)
+            : renderComment(comment);
 
           showError('Comment updated.');
         } catch (err) {
@@ -884,9 +1162,15 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         const commentEl = cancelEditBtn.closest('.cb-comment');
         const textEl = commentEl.querySelector('.cb-comment-text');
         const comment = findCommentById(commentId);
-
+        editSelectedGif = null;
+        editRemoveGif = false;
+        originalEditGif = null;
+        activeEditCommentId = null;
         if (comment) {
-          textEl.innerHTML = escapeHtml(comment.body);
+          // textEl.innerHTML = escapeHtml(comment.body);
+          commentEl.outerHTML = comment.parentId
+            ? renderReply(comment, comment.parentId)
+            : renderComment(comment);
         }
         return;
       }
@@ -918,18 +1202,9 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
             return;
           }
 
-          const commentEl = deleteBtn.closest('.cb-comment');
-
-          commentEl?.remove();
-
-          commentById.delete(commentId);
-
-          allComments = allComments.filter(
-            comment => comment.id !== commentId
-          );
+          markCommentDeletedInUI(commentId, 'DELETED');
 
           shadow.querySelector('.cb-comment-menu')?.remove();
-
           showError('Comment deleted.');
         } catch (err) {
           showError('Failed to delete comment.');
@@ -939,13 +1214,14 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         return;
       }
 
-
       const reactionBtn = e.target.closest('.cb-reaction-btn');
 
       if (reactionBtn) {
         if (!(await requireAuth())) return;
+
         const commentId = reactionBtn.dataset.commentId;
         const reactionType = reactionBtn.dataset.reactionType;
+
         reactionBtn.disabled = true;
 
         try {
@@ -961,14 +1237,22 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           );
 
           if (!res.ok) {
-            showError('Failed to add reaction. Please try again.');
+            showError('Reaction request failed.');
             return;
           }
+
           const updatedReaction = await res.json();
-          updateReactionButton( reactionBtn, updatedReaction );
+
+          updateReactionButton(
+            reactionBtn,
+            updatedReaction
+          );
+
           const comment = findCommentById(commentId);
+
           if (comment) {
             const reactions = comment.reactions || [];
+
             const existing = reactions.find(
               r => r.reactionType === updatedReaction.reactionType
             );
@@ -981,14 +1265,15 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
             }
 
             comment.reactions = reactions;
-            indexComment(comment);
           }
+
         } catch (err) {
           showError('Failed to add reaction. Please try again.');
           console.error('[ChatterBox] Failed to react:', err);
         } finally {
           reactionBtn.disabled = false;
         }
+
         return;
       }
 
@@ -1020,30 +1305,50 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
         const mention = replyTo ? `@${replyTo} ` : '';
 
-        container.innerHTML = `
-          <div class="cb-inline-reply">
+        activeReplyCommentId = commentId;
+        replySelectedGif = null;
 
+        container.innerHTML = `
+          <div class="cb-composer cb-inline-reply">
             <textarea
-              class="cb-inline-input"
+              class="cb-input cb-inline-input"
               placeholder="Write a reply..."
             >${mention}</textarea>
 
-            <div class="cb-inline-actions">
+            <div
+              class="cb-reply-gif-preview"
+              id="cb-reply-gif-preview-${commentId}"
+            ></div>
 
-              <button class="cb-inline-cancel">
-                Cancel
-              </button>
+            <div
+              id="cb-reply-gif-panel-${commentId}"
+              class="cb-gif-panel-inline"
+              style="display:none;"
+            ></div>
 
+            <div class="cb-composer-footer">
               <button
-                class="cb-inline-submit"
+                type="button"
+                class="cb-gif-btn cb-reply-gif-btn"
                 data-comment-id="${commentId}"
-                data-root-comment-id="${rootCommentId}"
               >
-                Reply
+                GIF
               </button>
 
-            </div>
+              <div class="cb-inline-actions">
+                <button class="cb-inline-cancel">
+                  Cancel
+                </button>
 
+                <button
+                  class="cb-inline-submit"
+                  data-comment-id="${commentId}"
+                  data-root-comment-id="${rootCommentId}"
+                >
+                  Reply
+                </button>
+              </div>
+            </div>
           </div>
         `;
 
@@ -1092,7 +1397,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
         const body = textarea.value.trim();
 
-        if (!body) return;
+        if (!body && !replySelectedGif) return;
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Posting...';
@@ -1108,25 +1413,31 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
         optimisticReplyId = appendOptimisticReply(
           rootCommentId,
-          body
+          body,
+          replySelectedGif
         );
 
+        const payload = buildCommentPayload(body, rootCommentId, replySelectedGif);
         try {
           console.time('post');
 
           const res = await authFetch(
-            `${API_URL}/api/v1/widget/${currentBoxId}/comments`,
+            `${API_URL}/api/v1/widget/sites/${siteId}/boxes/${currentBoxId}/comments`,
             {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
               },
-              body: JSON.stringify({
-                body,
-                parentId: rootCommentId
-              })
+              body: JSON.stringify(payload)
             }
           );
+          if (res.status === 429) {
+            if (optimisticReplyId) {
+              shadow.getElementById(optimisticReplyId)?.remove();
+            }
+            showError('You are commenting too quickly. Please slow down.');
+            return;
+          }
 
           console.timeEnd('post');
 
@@ -1175,7 +1486,8 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           if (replyContainer) {
             replyContainer.innerHTML = '';
           }
-
+          replySelectedGif = null;
+          activeReplyCommentId = null;
         } catch (err) {
           if (optimisticReplyId) {
             shadow.getElementById(optimisticReplyId)?.remove();
@@ -1196,6 +1508,8 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       const cancelBtn = e.target.closest('.cb-inline-cancel');
 
       if (cancelBtn) {
+        replySelectedGif = null;
+        activeReplyCommentId = null;;
         const container = cancelBtn.closest('.cb-reply-container');
 
         if (container) {
@@ -1279,40 +1593,51 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     submitBtn.addEventListener('click', async () => {
       const body = input.value.trim();
 
-      if (!body) return;
+      if (!body && !selectedGif) return;
       if (submitBtn.disabled) return;
 
       if (currentBox?.locked || !currentBox?.active) {
         showError(
           !currentBox.active
-            ? 'This discussion is inactive.'
-            : 'This discussion is locked.'
+            ? 'This box is inactive.'
+            : 'This box is locked.'
         );
         applyBoxStateToComposer();
         return;
       }
       if (!(await requireAuth())) return;
 
-      const optimisticId = prependOptimisticComment(body);
+      const optimisticId = prependOptimisticComment(body, selectedGif);
       submitBtn.disabled = true;
       submitBtn.textContent = 'Posting...';
 
+      const payload = buildCommentPayload(body, null, selectedGif);
       try {
         console.time('post');
         const res = await authFetch(
-          `${API_URL}/api/v1/widget/${currentBoxId}/comments`,
+          `${API_URL}/api/v1/widget/sites/${siteId}/boxes/${currentBoxId}/comments`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ body })
+            body: JSON.stringify(payload)
           }
         );
+        
+        if (res.status === 429) {
+          shadow.getElementById(optimisticId)?.remove();
+          showError('You are commenting too quickly. Please slow down.');
+          return;
+        }
         console.timeEnd('post');
 
         input.value = '';
-
+        input.style.height = 'auto';
+        selectedGif = null;
+        renderSelectedGifPreview();
+        const gifPanel = shadow.getElementById('cb-gif-panel');
+        if (gifPanel) gifPanel.style.display = 'none';
         shadow.getElementById(optimisticId)?.remove();
 
         const savedComment = await res.json();
@@ -1321,7 +1646,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         updateCommentTitle(totalCommentCount + 1);
         const commentsContainer = shadow.getElementById('cb-comments');
         commentsContainer.insertAdjacentHTML('afterbegin', renderComment(savedComment));
-
+        
       } catch (err) {
         shadow.getElementById(optimisticId)?.remove();
         showError('Failed to post comment. Please try again.');
@@ -1333,6 +1658,235 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         applyBoxStateToComposer();
       }
     });
+  }
+
+  function toggleGifPanel(panelId, mode = 'composer') {
+    const panel = shadow.getElementById(panelId);
+    if (!panel) return;
+
+    if (panel.style.display === 'block') {
+      panel.style.display = 'none';
+      return;
+    }
+
+    renderGifPanel(panelId, mode);
+  }
+
+  function renderGifPanel(panelId, mode = 'composer') {
+    const panel = shadow.getElementById(panelId);
+    if (!panel) return;
+
+    panel.style.display = 'block';
+    panel.dataset.mode = mode;
+
+    panel.innerHTML = `
+      <input
+        class="cb-gif-search"
+        placeholder="Search GIFs..."
+      />
+
+      <div class="cb-gif-results"></div>
+    `;
+
+    const searchInput = panel.querySelector('.cb-gif-search');
+    if (searchInput) {
+      searchInput.autocomplete = 'off';
+    }
+
+    searchInput?.addEventListener(
+      'input',
+      debounce(() => handleInlineGifSearch(searchInput), 300)
+    );
+
+    searchInput?.focus();
+  }
+
+  async function searchGifs(query) {
+    const res = await fetch(
+      `${API_URL}/api/v1/widget/gifs/search?q=${encodeURIComponent(query)}`
+    );
+
+    if (!res.ok) {
+      throw new Error(`GIF search failed: ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  async function handleInlineGifSearch(searchInput) {
+    const query = searchInput.value.trim();
+    console.log('[ChatterBox] GIF query:', query);
+    const panel = searchInput.closest('.cb-gif-panel-inline');
+    const resultsEl = panel?.querySelector('.cb-gif-results');
+    if (!resultsEl) {
+      console.error('[ChatterBox] No GIF results element found.');
+      return;
+    }
+    if (!query) {
+      resultsEl.innerHTML = '';
+      return;
+    }
+    resultsEl.innerHTML = `<div class="cb-gif-loading">Searching...</div>`;
+    try {
+      const gifs = await searchGifs(query);
+      console.log('[ChatterBox] GIF results:', gifs);
+
+      if (!gifs.length) {
+        resultsEl.innerHTML = `<div class="cb-empty">No GIFs found.</div>`;
+        return;
+      }
+
+      resultsEl.innerHTML = gifs.map(gif => `
+        <button
+          type="button"
+          class="cb-gif-result"
+          data-gif-url="${escapeAttr(gif.gifUrl)}"
+          data-gif-preview-url="${escapeAttr(gif.gifPreviewUrl || gif.gifUrl)}"
+          data-gif-provider="${escapeAttr(gif.gifProvider)}"
+          data-gif-provider-id="${escapeAttr(gif.gifProviderId)}"
+          data-gif-title="${escapeAttr(gif.gifTitle || 'GIF')}">
+          <img src="${escapeAttr(gif.gifPreviewUrl || gif.gifUrl)}" />
+        </button>
+      `).join('');
+    } catch (err) {
+      console.error('[ChatterBox] GIF search failed:', err);
+      resultsEl.innerHTML = `<div class="cb-gif-error">Failed to load GIFs.</div>`;
+    }
+  }
+
+  function debounce(fn, delay) {
+    let timeoutId;
+
+    return function (...args) {
+      clearTimeout(timeoutId);
+
+      timeoutId = setTimeout(() => {
+        fn.apply(this, args);
+      }, delay);
+    };
+  }
+
+  function renderSelectedGifPreview() {
+    const preview = shadow.querySelector('#cb-selected-gif-preview');
+    if (!preview) return;
+
+    if (!selectedGif) {
+      preview.innerHTML = '';
+      return;
+    }
+
+    preview.innerHTML = `
+      <div class="cb-selected-gif">
+        <img src="${escapeAttr(selectedGif.gifPreviewUrl || selectedGif.gifUrl)}"
+            alt="${escapeAttr(selectedGif.gifTitle || 'Selected GIF')}" />
+        <button type="button" id="cb-remove-selected-gif">×</button>
+      </div>
+    `;
+  }
+
+  function renderReplyGifPreview(commentId) {
+    const preview = shadow.getElementById(`cb-reply-gif-preview-${commentId}`);
+    if (!preview) return;
+
+    if (!replySelectedGif) {
+      preview.innerHTML = '';
+      return;
+    }
+
+    preview.innerHTML = `
+      <div class="cb-selected-gif">
+        <img
+          src="${escapeAttr(replySelectedGif.gifPreviewUrl || replySelectedGif.gifUrl)}"
+          alt="${escapeAttr(replySelectedGif.gifTitle || 'Selected GIF')}"
+        />
+        <button
+          type="button"
+          class="cb-remove-reply-gif"
+          data-comment-id="${commentId}"
+        >
+          ×
+        </button>
+      </div>
+    `;
+  }
+
+  function renderEditGifPreview(commentId) {
+    const preview = shadow.getElementById(`cb-edit-gif-preview-${commentId}`);
+    if (!preview) return;
+
+    if (editRemoveGif) {
+      preview.innerHTML = '';
+      return;
+    }
+
+    const gif = editSelectedGif || originalEditGif;
+
+    if (!gif) {
+      preview.innerHTML = '';
+      return;
+    }
+
+    preview.innerHTML = `
+      <div class="cb-selected-gif">
+        <img
+          src="${escapeAttr(gif.gifPreviewUrl || gif.gifUrl)}"
+          alt="${escapeAttr(gif.gifTitle || 'GIF')}"
+        />
+        <button
+          type="button"
+          class="cb-edit-remove-gif"
+          data-comment-id="${commentId}"
+        >
+          ×
+        </button>
+      </div>
+    `;
+  }
+
+  function buildCommentPayload(body, parentId = null, gif = null) {
+    return {
+      body,
+      ...(parentId ? { parentId } : {}),
+      ...(gif ? {
+        gifUrl: gif.gifUrl,
+        gifPreviewUrl: gif.gifPreviewUrl,
+        gifProvider: gif.gifProvider,
+        gifProviderId: gif.gifProviderId,
+        gifTitle: gif.gifTitle
+      } : {})
+    };
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(String(value ?? ""));
+  }
+
+  function markCommentDeletedInUI(commentId, status) {
+    const comment = findCommentById(commentId);
+    if (!comment) return;
+    comment.status = status;
+    comment.body = status === 'REMOVED' ? '[removed]' : '[deleted]';
+    comment.permissions = {};
+    comment.reactions = [];
+    comment.locked = true;
+    indexComment(comment);
+    const commentEl = shadow.querySelector( `[data-comment-root-id="${commentId}"]` );
+    if (!commentEl) return;
+    commentEl.outerHTML = comment.parentId
+      ? renderReply(comment, comment.parentId)
+      : renderComment(comment);
+  }
+
+  function isDeletedComment(comment) {
+    return comment.status === 'DELETED' || comment.status === 'REMOVED';
+  }
+
+  function deletedLabel(comment) {
+    return comment.status === 'REMOVED' ? '[removed]' : '[deleted]';
+  }
+
+  function deletedAvatarText(comment) {
+    return comment.status === 'REMOVED' ? '!' : '×';
   }
 
   function updateReactionButton(button, reaction) {
@@ -1357,7 +1911,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     }
   }
 
-  function prependOptimisticComment(body) {
+  function prependOptimisticComment(body, selectedGif) {
     const container = shadow.getElementById('cb-comments');
     const optimisticId = `cb-pending-${crypto.randomUUID()}`;
 
@@ -1374,6 +1928,14 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           <div class="cb-comment-text">
             ${escapeHtml(body)}
           </div>
+          ${selectedGif ? `
+            <div class="cb-comment-gif">
+                <img
+                    src="${escapeAttr(selectedGif.gifPreviewUrl || selectedGif.gifUrl)}"
+                    alt=""
+                />
+            </div>
+            ` : ""}
         </div>
       </div>
     `;
@@ -1383,14 +1945,12 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     return optimisticId;
   }
 
-  function appendOptimisticReply(rootCommentId, body) {
-    let repliesContainer =
-      shadow.getElementById(`replies-${rootCommentId}`);
+  function appendOptimisticReply(rootCommentId, body, selectedGif) {
+    let repliesContainer = shadow.getElementById(`replies-${rootCommentId}`);
 
     if (!repliesContainer) return null;
 
-    const optimisticId =
-      `cb-pending-reply-${crypto.randomUUID()}`;
+    const optimisticId = `cb-pending-reply-${crypto.randomUUID()}`;
 
     repliesContainer.insertAdjacentHTML(
       'beforeend',
@@ -1410,6 +1970,14 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
             <div class="cb-comment-text">
               ${escapeHtml(body)}
             </div>
+            ${selectedGif ? `
+              <div class="cb-comment-gif">
+                  <img
+                      src="${escapeAttr(selectedGif.gifPreviewUrl || selectedGif.gifUrl)}"
+                      alt=""
+                  />
+              </div>
+              ` : ""}
           </div>
         </div>
       `
@@ -1548,6 +2116,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   async function handleLogin() {
+    console.time("TOTAL LOGIN TIME");
     const username = shadow.querySelector('#cb-login-username')?.value.trim();
     const password = shadow.querySelector('#cb-login-password')?.value.trim();
     if (!username || !password) {
@@ -1563,13 +2132,14 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         password
       });
 
-      console.time('login');
+      console.time('Keycloak req');
 
       const res = await fetch(
         'http://127.0.0.1:8080/realms/chatterbox/protocol/openid-connect/token',
         {
           method: 'POST',
           headers: {
+
             'Content-Type':
               'application/x-www-form-urlencoded'
           },
@@ -1577,23 +2147,76 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         }
       );
 
-      console.timeEnd('login');
+      console.timeEnd('Keycloak req');
 
       if (!res.ok) {
         showAuthError('Invalid username or password.');
         return;
       }
-
+      console.time("Parse token");
       const data = await res.json();
+      console.timeEnd("Parse token");
 
-      config.token = data.access_token;
+      console.time("Save auth");
       saveAuthSession(data);
+      console.log("token saved?", Boolean(config.token));
       console.log(decodeJwtPayload(config.token));
+      console.timeEnd("Save auth");
+      console.time("Refresh after login");
       closeAuthModal();
+      
+      if (!currentBox?.active) {
+        await init();
+      } else {
+        await refreshAfterLogin();
+      }
+      console.timeEnd("Refresh after login");
+      console.timeEnd("TOTAL LOGIN TIME");
+      //await refreshCurrentComments();
     } catch (err) {
       showAuthError('Please enter your username and password.');
       console.error(err);
     }
+  }
+
+  async function refreshAfterLogin() {
+    await refreshBoxState();
+    await refreshCurrentComments();
+  }
+
+  async function refreshBoxState() {
+    const authHeaders = await getOptionalAuthHeaders();
+    if (!authHeaders.Authorization) {
+      throw new Error("No auth token available for permission refresh.")
+    }
+
+    let res = await authFetch(`${API_URL}/api/v1/widget/boxes/${currentBoxId}`);
+    if (!res.ok) {
+      throw new Error(`Failed to refresh box state: ${res.status}`);
+    }
+
+    currentBox = await res.json();
+    currentBoxId = currentBox.id;
+
+    refreshBoxModerationUI();
+    applyBoxStateToComposer();
+  }
+
+  async function getOptionalAuthHeaders() {
+    if (!config.token) return {};
+
+    try {
+      const fresh = await ensureFreshToken();
+
+      if (fresh) {
+        return { Authorization: `Bearer ${config.token}` };
+      }
+    } catch (err) {
+      console.warn('[ChatterBox] Token refresh failed, loading anonymously:', err);
+    }
+
+    clearAuthSession();
+    return {};
   }
 
   function saveAuthSession(data) {
@@ -1860,14 +2483,13 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   function getStyles() {
     return `
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      :host { font-family: 'Inter', system-ui, sans-serif; }
-      .cb-root { max-width: 720px; color: #e1e1e1; background: #111318; border: 1px solid #23262d; border-radius: 16px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.28); }
-      .cb-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+      :host { display: block; width: 100%; min-width: 0; font-family: 'Inter', system-ui, sans-serif; }
+      .cb-root { width: 100%; max-width: none; min-width: 0; color: #e1e1e1; background: #111318; border: 1px solid #23262d; border-radius: 16px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.28); }      .cb-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
       .cb-title { font-size: 16px; font-weight: 600; color: #f8fafc; }
       .cb-composer { margin-bottom: 20px; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.018)); border: 1px solid rgba(148,163,184,0.16); border-radius: 14px; overflow: hidden; } 
       .cb-input { width: 100%; min-height: 44px; max-height: 160px; background: transparent; border: none; outline: none; resize: none; padding: 12px 14px; color: #f8fafc; font-size: 14px; line-height: 1.45; font-family: inherit; } 
       .cb-composer:focus-within { border-color: rgba(226,232,240,0.28); box-shadow: 0 0 0 3px rgba(148,163,184,0.08); } 
-      .cb-composer-footer { display: flex; justify-content: flex-end; padding: 8px 10px 10px; border-top: 1px solid rgba(255,255,255,0.05); }
+      .cb-composer-footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px 10px; border-top: 1px solid rgba(255,255,255,0.05);  }
       .cb-input:focus { background: rgba(255,255,255,0.015); }
       .cb-input::placeholder { color: #6b7280; } 
       .cb-submit-btn { background: #f3f4f6; color: #111827; border: none; border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.15s ease; } 
@@ -1961,8 +2583,33 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       .cb-mod-menu, .cb-box-mod-actions { display: flex; flex-direction: column; gap: 4px; } 
       .cb-mod-menu { position: absolute; right: 0; bottom: 32px; min-width: 180px; background: #181b22; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 6px; z-index: 60; box-shadow: 0 12px 32px rgba(0,0,0,.35); } 
       .cb-mod-menu-btn { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: #cbd5e1; border-radius: 999px; padding: 5px 9px; font-size: 12px; cursor: pointer; } 
-      .cb-box-mod-action { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: #cbd5e1; border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; } 
+      .cb-box-mod-action { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); border-radius: 999px; color: #cbd5e1; font-size: 12px; font-weight: 500; cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .1s ease; } 
+      .cb-box-mod-action:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); transform: translateY(-1px); }
+      .cb-box-mod-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; } 
       .cb-danger-item { color: #fecaca; }
+      .cb-comment-deleted { opacity: 0.72; } 
+      .cb-avatar-deleted { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.18); } 
+      .cb-deleted-note { font-size: 12px; color: #64748b; font-style: italic; }
+      .cb-box-status { margin-bottom: 16px; padding: 12px; border: 1px solid rgba(255,255,255,.08); border-radius: 12px; background: rgba(255,255,255,.03); display: flex; flex-direction: column; gap: 8px; } 
+      .cb-box-status strong { color: #f8fafc; font-size: 14px; } 
+      .cb-box-status span { color: #94a3b8; font-size: 13px; } 
+      .cb-box-login { width: fit-content; padding: 7px 12px; }
+      .cb-gif-search { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: white; margin-bottom: 12px; } 
+      .cb-gif-results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 45vh; overflow-y: auto; } 
+      .cb-gif-result { border: 0; padding: 0; background: transparent; cursor: pointer; border-radius: 10px; overflow: hidden; } 
+      .cb-gif-result img, .cb-comment-gif img, .cb-selected-gif img { width: 100%; display: block; border-radius: 10px; } 
+      .cb-selected-gif { position: relative; max-width: 240px; margin-top: 10px; } 
+      #cb-remove-selected-gif{position:absolute;top:6px;right:6px;width:26px;height:26px;border:none;border-radius:50%;background:rgba(0,0,0,.65);color:white;cursor:pointer;}
+      .cb-gif-btn{ border:none; border-radius:8px; padding:6px 12px; background:rgba(255,255,255,.06); color:#f8fafc; cursor:pointer; } 
+      .cb-gif-btn:hover{ background:rgba(255,255,255,.12); }
+      .cb-gif-panel-inline { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.025); } 
+      .cb-gif-search { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: white; margin-bottom: 12px; outline: none; } 
+      .cb-gif-result { aspect-ratio: 1 / 1; max-height: 110px; } 
+      .cb-gif-result img { width: 100%; height: 100%; object-fit: cover; } 
+      .cb-gif-results { grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: 260px; overflow-y: auto; }
+      .cb-selected-gif { max-width: 220px; margin: 10px 12px; } 
+      .cb-comment-gif { max-width: 260px; margin-top: 8px; } 
+      .cb-comment-gif img, .cb-selected-gif img { width: 100%; height: auto; border-radius: 10px; }
     `;
   }
 

@@ -2,15 +2,15 @@ export function renderBoxModerationMenu(box) {
   const p = box.permissions || {};
 
   const hasActions =
-    p.canShutBox ||
-    p.canDeactivateBox ||
+    p.canToggleBoxLock ||
+    p.canToggleBox ||
     p.canEmptyBox;
 
   if (!hasActions) return '';
 
   return `
     <div class="cb-box-mod-actions">
-      ${p.canShutBox ? `
+      ${p.canToggleBoxLock ? `
         <button
           class="cb-box-mod-action"
           data-box-action="${box.locked ? 'open' : 'shut'}"
@@ -19,7 +19,7 @@ export function renderBoxModerationMenu(box) {
         </button>
       ` : ''}
 
-      ${p.canDeactivateBox ? `
+      ${p.canToggleBox ? `
         <button
           class="cb-box-mod-action cb-danger-item"
           data-box-action="deactivate"
