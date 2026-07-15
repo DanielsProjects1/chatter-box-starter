@@ -7,37 +7,40 @@ import { renderCommentModerationMenu } from './commentModerationMenu.js';
 import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
 (function () {
-  const API_URL = 'http://127.0.0.1:8081';
+  // const API_URL = 'http://127.0.0.1:8081';
 
   const REACTION_UI = {HEART: '❤️', THUMBS_UP: '👍', THUMBS_DOWN: '👎', LAUGH: '😂', SURPRISED: '😮', SAD: '😢', FIRE: '🔥' };
   const REACTION_ORDER = [ 'THUMBS_UP', 'HEART', 'FIRE', 'LAUGH', 'SURPRISED', 'SAD', 'THUMBS_DOWN' ];
 
   const config = window.ChatterBoxConfig || {};
+  const API_URL = config.apiUrl;
+  const KEYCLOAK_BASE_URL = config.keycloakBaseUrl;
+
+  if (!API_URL) {
+    console.error('[ChatterBox] No apiUrl provided in window.ChatterBoxConfig');
+    return;
+  }
+  if (!KEYCLOAK_BASE_URL) {
+    console.error(
+      '[ChatterBox] Missing keycloakBaseUrl in window.ChatterBoxConfig'
+    );
+    return;
+  }
+
+  const KEYCLOAK_TOKEN_URL = `${KEYCLOAK_BASE_URL}/realms/chatterbox/protocol/openid-connect/token`;
+
   let refreshPromise = null;
   const repliesByParentId = new Map();
-  let authReadyPromise = Promise.resolve();
-  const savedToken = localStorage.getItem('chatterbox_token');
-  const lastActive = Number(localStorage.getItem('chatterbox_last_active') || 0);
-  const IDLE_LIMIT = 1000 * 60 * 60 * 24 * 7; // 7 days
-  // if (savedToken && Date.now() - lastActive < IDLE_LIMIT) {
-  //   config.token = savedToken;
-  // } else {
-  //   clearAuthSession();
-  // }
-  if (savedToken && Date.now() - lastActive < IDLE_LIMIT) {
-    config.token = savedToken;
 
-    if (shouldRefreshToken(savedToken)) {
-      authReadyPromise = refreshAccessToken().then(success => {
-        if (!success) {
-          clearAuthSession();
-        }
-        return success;
-      });
-    }
-  } else {
-    clearAuthSession();
-  }
+  const authState = {
+    accessToken: null,
+    refreshToken: null
+  };
+
+  // Remove tokens created by older widget versions.
+  localStorage.removeItem('chatterbox_token');
+  localStorage.removeItem('chatterbox_refresh_token');
+  localStorage.removeItem('chatterbox_last_active');
 
   const siteId = config.siteId;
 
@@ -79,10 +82,10 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
     try {
       const headers = { 'Content-Type': 'application/json' };
-      if (config.token) {
+      if (authState.accessToken) {
         const fresh = await ensureFreshToken();
         if (fresh) {
-          headers.Authorization = `Bearer ${config.token}`;
+          headers.Authorization = `Bearer ${authState.accessToken}`;
         }
       }
       let res = await fetch(`${API_URL}/api/v1/widget/init`, {
@@ -105,8 +108,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         throw new Error(`Init failed: ${res.status}`);
       }
       const box = await res.json();
-      console.log("init box", box);
-      console.log("box perms", box.permissions);
       render(box);
     } catch (err) {
       showError('Failed to initialize comments. Please refresh the page.');
@@ -135,7 +136,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           <div class="cb-box-status">
             <strong>This discussion is inactive.</strong>
             <span>Log in as a moderator or site owner to reactivate it.</span>
-            ${!config.token ? `
+            ${!authState.accessToken ? `
               <button class="cb-auth-login cb-box-login">
                 Log in
               </button>
@@ -185,7 +186,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   async function loadComments(boxId) {
-    console.log("Loading comments for box: ", boxId);
     try {
       const url = `${API_URL}/api/v1/widget/${boxId}/comments?page=${currentPage}&size=20`;
 
@@ -411,7 +411,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`,
       {
         headers: {
-          ...(config.token ? { Authorization: `Bearer ${config.token}` } : {})
+          ...(authState.accessToken ? { Authorization: `Bearer ${authState.accessToken}` } : {})
         }
       }
     );
@@ -1419,8 +1419,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
         const payload = buildCommentPayload(body, rootCommentId, replySelectedGif);
         try {
-          console.time('post');
-
           const res = await authFetch(
             `${API_URL}/api/v1/widget/sites/${siteId}/boxes/${currentBoxId}/comments`,
             {
@@ -1438,8 +1436,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
             showError('You are commenting too quickly. Please slow down.');
             return;
           }
-
-          console.timeEnd('post');
 
           const replyContainer = wrapper.closest('.cb-reply-container');
 
@@ -1715,7 +1711,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
   async function handleInlineGifSearch(searchInput) {
     const query = searchInput.value.trim();
-    console.log('[ChatterBox] GIF query:', query);
     const panel = searchInput.closest('.cb-gif-panel-inline');
     const resultsEl = panel?.querySelector('.cb-gif-results');
     if (!resultsEl) {
@@ -1729,7 +1724,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     resultsEl.innerHTML = `<div class="cb-gif-loading">Searching...</div>`;
     try {
       const gifs = await searchGifs(query);
-      console.log('[ChatterBox] GIF results:', gifs);
 
       if (!gifs.length) {
         resultsEl.innerHTML = `<div class="cb-empty">No GIFs found.</div>`;
@@ -2015,12 +2009,10 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           </div>
         `).join('')
       : '<div class="cb-empty">No site rules yet.</div>';
-    
-    
   }
 
   async function requireAuth() {
-    if (!config.token) {
+    if (!authState.accessToken) {
       showAuthModal();
       return false;
     }
@@ -2116,7 +2108,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   async function handleLogin() {
-    console.time("TOTAL LOGIN TIME");
     const username = shadow.querySelector('#cb-login-username')?.value.trim();
     const password = shadow.querySelector('#cb-login-password')?.value.trim();
     if (!username || !password) {
@@ -2132,10 +2123,8 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         password
       });
 
-      console.time('Keycloak req');
-
       const res = await fetch(
-        'http://127.0.0.1:8080/realms/chatterbox/protocol/openid-connect/token',
+        KEYCLOAK_TOKEN_URL,
         {
           method: 'POST',
           headers: {
@@ -2147,22 +2136,13 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         }
       );
 
-      console.timeEnd('Keycloak req');
-
       if (!res.ok) {
         showAuthError('Invalid username or password.');
         return;
       }
-      console.time("Parse token");
       const data = await res.json();
-      console.timeEnd("Parse token");
 
-      console.time("Save auth");
       saveAuthSession(data);
-      console.log("token saved?", Boolean(config.token));
-      console.log(decodeJwtPayload(config.token));
-      console.timeEnd("Save auth");
-      console.time("Refresh after login");
       closeAuthModal();
       
       if (!currentBox?.active) {
@@ -2170,8 +2150,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       } else {
         await refreshAfterLogin();
       }
-      console.timeEnd("Refresh after login");
-      console.timeEnd("TOTAL LOGIN TIME");
       //await refreshCurrentComments();
     } catch (err) {
       showAuthError('Please enter your username and password.');
@@ -2203,13 +2181,13 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   async function getOptionalAuthHeaders() {
-    if (!config.token) return {};
+    if (!authState.accessToken) return {};
 
     try {
       const fresh = await ensureFreshToken();
 
       if (fresh) {
-        return { Authorization: `Bearer ${config.token}` };
+        return { Authorization: `Bearer ${authState.accessToken}` };
       }
     } catch (err) {
       console.warn('[ChatterBox] Token refresh failed, loading anonymously:', err);
@@ -2220,17 +2198,22 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   function saveAuthSession(data) {
-    config.token = data.access_token;
-    localStorage.setItem('chatterbox_token', data.access_token);
-    localStorage.setItem('chatterbox_refresh_token', data.refresh_token);
-    localStorage.setItem('chatterbox_last_active', Date.now().toString());
+    if (!data?.access_token) {
+      throw new Error('Authentication response did not include an access token.');
+    }
+
+    authState.accessToken = data.access_token;
+
+    // Some providers may omit a replacement refresh token.
+    // Preserve the existing one in that case.
+    if (data.refresh_token) {
+      authState.refreshToken = data.refresh_token;
+    }
   }
 
   function clearAuthSession() {
-    config.token = null;
-    localStorage.removeItem('chatterbox_token');
-    localStorage.removeItem('chatterbox_refresh_token');
-    localStorage.removeItem('chatterbox_last_active');
+    authState.accessToken = null;
+    authState.refreshToken = null;
   }
 
   async function authFetch(url, options = {}) {
@@ -2242,17 +2225,12 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       return new Response(null, { status: 401 });
     }
 
-    localStorage.setItem(
-      'chatterbox_last_active',
-      Date.now().toString()
-    );
-
     const request = () =>
       fetch(url, {
         ...options,
         headers: {
           ...(options.headers || {}),
-          Authorization: `Bearer ${config.token}`
+          Authorization: `Bearer ${authState.accessToken}`
         }
       });
 
@@ -2273,17 +2251,17 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   async function ensureFreshToken() {
-    await authReadyPromise;
-    if (!config.token) {
+    if (!authState.accessToken) {
       return false;
     }
 
-    if (!shouldRefreshToken(config.token)) {
+    if (!shouldRefreshToken(authState.accessToken)) {
       return true;
     }
 
     const refreshed = await refreshAccessToken();
-    return refreshed && Boolean(config.token);
+
+    return refreshed && Boolean(authState.accessToken);
   }
 
   function closeAuthModal() {
@@ -2298,10 +2276,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
     refreshPromise = (async () => {
       try {
-        const refreshToken =
-          localStorage.getItem(
-            'chatterbox_refresh_token'
-          );
+        const refreshToken = authState.refreshToken;
 
         if (!refreshToken) {
           clearAuthSession();
@@ -2315,7 +2290,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         });
 
         const res = await fetch(
-          'http://127.0.0.1:8080/realms/chatterbox/protocol/openid-connect/token',
+          KEYCLOAK_TOKEN_URL,
           {
             method: 'POST',
             headers: {
