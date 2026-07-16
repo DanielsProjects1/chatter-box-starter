@@ -1437,6 +1437,12 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
             return;
           }
 
+          if (!res.ok) {
+            shadow.getElementById(optimisticId)?.remove();
+            showError(`Failed to post comment (${res.status}).`);
+            return;
+          }
+
           const replyContainer = wrapper.closest('.cb-reply-container');
 
           // await refreshCurrentComments();
@@ -1609,7 +1615,6 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
       const payload = buildCommentPayload(body, null, selectedGif);
       try {
-        console.time('post');
         const res = await authFetch(
           `${API_URL}/api/v1/widget/sites/${siteId}/boxes/${currentBoxId}/comments`,
           {
@@ -1626,7 +1631,18 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           showError('You are commenting too quickly. Please slow down.');
           return;
         }
-        console.timeEnd('post');
+        if (res.status === 401) {
+          shadow.getElementById(optimisticId)?.remove();
+          showError('Your session expired. Please log in again.');
+          showAuthModal();
+          return;
+        }
+
+        if (!res.ok) {
+          shadow.getElementById(optimisticId)?.remove();
+          showError(`Failed to post comment (${res.status}).`);
+          return;
+        }
 
         input.value = '';
         input.style.height = 'auto';
@@ -2236,18 +2252,26 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
     let res = await request();
 
-    if (res.status === 401) {
-      const refreshed = await refreshAccessToken();
-
-      if (refreshed) {
-        res = await request();
-      } else {
-        clearAuthSession();
-        closeAuthModal();
-      }
+    if (res.status !== 401) {
+      return res;
     }
 
-    return res;
+    const refreshed = await refreshAccessToken();
+
+    if (!refreshed) {
+      clearAuthSession();
+      showAuthModal();
+      return res;
+    }
+
+    res = await request();
+
+    if (res.status === 401) {
+      clearAuthSession();
+      showAuthModal();
+    }
+
+    return res
   }
 
   async function ensureFreshToken() {

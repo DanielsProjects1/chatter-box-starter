@@ -4,6 +4,13 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 src/main/resources/application.properties
+application-local.properties
+application-secrets.properties
+node_modules/
+!.env.example
+run-local.ps1
+set-local-env.ps1
+
 
 ### STS ###
 .apt_generated

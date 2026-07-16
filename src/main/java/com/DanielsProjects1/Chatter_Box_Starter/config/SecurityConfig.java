@@ -24,6 +24,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST,"/api/v1/widget/init").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/widget/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/sites/*/rules").permitAll()
