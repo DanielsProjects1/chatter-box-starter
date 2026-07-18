@@ -49,6 +49,8 @@ public class WidgetController {
         }
         System.out.println("INIT AUTH = " + authentication);
         System.out.println("INIT USER ID = " + userId);
+        System.out.println(request.getSiteId());
+        System.out.println(request.getPageUrl());
         BoxDTO box = boxService.getBox(request.getSiteId(), request.getPageUrl(), userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(box);
     }
