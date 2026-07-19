@@ -29,12 +29,7 @@ public class CorsConfig {
                 "OPTIONS"
         ));
 
-        widgetCors.setAllowedHeaders(List.of(
-                "Authorization",
-                "Content-Type",
-                "Accept",
-                "Origin"
-        ));
+        widgetCors.setAllowedHeaders(List.of("*"));
 
         widgetCors.setExposedHeaders(List.of(
                 "Retry-After",
