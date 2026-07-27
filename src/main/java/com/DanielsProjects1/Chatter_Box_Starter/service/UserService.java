@@ -1,10 +1,14 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
+import com.DanielsProjects1.Chatter_Box_Starter.dto.UserDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.GlobalRole;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.User;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.UserRepository;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.file.AccessDeniedException;
 import java.util.UUID;
@@ -22,6 +26,44 @@ public class UserService {
         User user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("This user does not exist."));
         return user;
+    }
+
+    @Transactional
+    public UserDTO setUsername(UUID keycloakUserId, String rawUsername) {
+        User user = userRepo.findById(keycloakUserId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Chatterbox user was not found"
+                ));
+
+        String username = normalizeAndValidateUsername(rawUsername);
+
+        if (user.getUsername() != null && !user.getUsername().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Username has already been configured"
+            );
+        }
+
+        if (userRepo.existsByUsernameIgnoreCase(username)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Username is already taken"
+            );
+        }
+
+        user.setUsername(username);
+
+        try {
+            User savedUser = userRepo.save(user);
+            return UserDTO.from(savedUser);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Username is already taken",
+                    exception
+            );
+        }
     }
 
     @Transactional
@@ -58,5 +100,35 @@ public class UserService {
                 });
     }
 
+    private String normalizeAndValidateUsername(String rawUsername) {
+        if (rawUsername == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Username is null"
+            );
+        }
+        String username = rawUsername.trim();
 
+        if (username.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Username is empty"
+            );
+        }
+
+        if (username.length() < 3 || username.length() > 50) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Username must be between 3 and 50 characters"
+            );
+        }
+
+        if (!username.matches("^[A-Za-z0-9_]+$")) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Username must onlycontain alphanumerica"
+            );
+        }
+        return username;
+    }
 }
