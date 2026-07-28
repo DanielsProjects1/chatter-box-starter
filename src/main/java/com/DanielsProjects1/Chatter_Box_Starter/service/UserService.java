@@ -22,17 +22,16 @@ public class UserService {
         this.userRepo = userRepo;
     }
 
-    public UserDTO getUserProfile(UUID userId) {
-        User user = userRepo.findById(userId)
+    public User getUserProfile(UUID userId) {
+        return userRepo.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "This user does not exist."
                 ));
-        return UserDTO.from(user);
     }
 
     @Transactional
-    public UserDTO setUsername(UUID keycloakUserId, String rawUsername) {
+    public User setUsername(UUID keycloakUserId, String rawUsername) {
         User user = userRepo.findById(keycloakUserId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -59,7 +58,7 @@ public class UserService {
 
         try {
             User savedUser = userRepo.save(user);
-            return UserDTO.from(savedUser);
+            return savedUser;
         } catch (DataIntegrityViolationException exception) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,

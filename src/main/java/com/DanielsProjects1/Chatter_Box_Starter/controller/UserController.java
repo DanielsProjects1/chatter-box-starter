@@ -30,10 +30,10 @@ public class UserController {
     ) {
         UUID userId = SecurityUtils.getUserId(authentication);
 
-        return userService.setUsername(
+        return UserDTO.from(userService.setUsername(
                 userId,
                 request.username()
-        );
+        ));
     }
 
     @GetMapping("/me")
@@ -41,7 +41,7 @@ public class UserController {
             Authentication authentication
     ) {
         UUID userId = SecurityUtils.getUserId(authentication);
-        return userService.getUserProfile(userId);
+        return UserDTO.from(userService.getUserProfile(userId));
     }
 
 }
