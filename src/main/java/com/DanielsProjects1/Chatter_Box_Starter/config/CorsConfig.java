@@ -85,6 +85,11 @@ public class CorsConfig {
                 dashboardCors
         );
 
+        source.registerCorsConfiguration(
+                "/api/v1/users/**",
+                dashboardCors
+        );
+
         CorsConfiguration authCors = new CorsConfiguration();
 
         authCors.setAllowedOriginPatterns(List.of("*"));
