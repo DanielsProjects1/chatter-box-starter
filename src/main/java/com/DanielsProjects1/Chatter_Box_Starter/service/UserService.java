@@ -22,10 +22,13 @@ public class UserService {
         this.userRepo = userRepo;
     }
 
-    public User getUserProfile(UUID userId) {
+    public UserDTO getUserProfile(UUID userId) {
         User user = userRepo.findById(userId)
-                .orElseThrow(() -> new RuntimeException("This user does not exist."));
-        return user;
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "This user does not exist."
+                ));
+        return UserDTO.from(user);
     }
 
     @Transactional
