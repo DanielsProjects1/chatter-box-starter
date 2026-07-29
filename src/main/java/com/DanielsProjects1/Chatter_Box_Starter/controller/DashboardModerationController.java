@@ -1,9 +1,7 @@
 package com.DanielsProjects1.Chatter_Box_Starter.controller;
 
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.ModerateComment;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentReportDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentStatus;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.CommentReportDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.ReportAction;
 import com.DanielsProjects1.Chatter_Box_Starter.service.BoxService;
 import com.DanielsProjects1.Chatter_Box_Starter.service.CommentService;
@@ -14,7 +12,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.file.AccessDeniedException;
-import java.util.List;
 import java.util.UUID;
 
 @RestController

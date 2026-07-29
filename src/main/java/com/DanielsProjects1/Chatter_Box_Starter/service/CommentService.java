@@ -2,10 +2,10 @@ package com.DanielsProjects1.Chatter_Box_Starter.service;
 
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.AddComment;
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.EditComment;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentPermissions;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.CommentReportDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.ReactionDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.CommentDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.CommentPermissions;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.CommentReportDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.ReactionDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.*;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.*;
 import org.springframework.data.domain.Page;

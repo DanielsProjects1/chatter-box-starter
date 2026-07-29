@@ -1,4 +1,4 @@
-package com.DanielsProjects1.Chatter_Box_Starter.dto;
+package com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs;
 
 import lombok.Data;
 

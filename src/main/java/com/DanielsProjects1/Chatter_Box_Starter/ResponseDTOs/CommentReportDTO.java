@@ -1,9 +1,8 @@
-package com.DanielsProjects1.Chatter_Box_Starter.dto;
+package com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs;
 
 import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentReport;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.ReportAction;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.ReportReason;
-import com.DanielsProjects1.Chatter_Box_Starter.entities.SiteRule;
 import lombok.Data;
 
 import java.time.Instant;

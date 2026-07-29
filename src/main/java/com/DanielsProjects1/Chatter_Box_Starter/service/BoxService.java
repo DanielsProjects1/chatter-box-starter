@@ -1,7 +1,7 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
-import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxPermissions;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.BoxDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.BoxPermissions;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.*;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.*;
 import com.DanielsProjects1.Chatter_Box_Starter.utils.CachedBox;
@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.AccessDeniedException;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service

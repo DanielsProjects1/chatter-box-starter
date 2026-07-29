@@ -1,7 +1,7 @@
 package com.DanielsProjects1.Chatter_Box_Starter.controller;
 
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.*;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.*;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.*;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentReport;
 import com.DanielsProjects1.Chatter_Box_Starter.giphy.GifResult;
 import com.DanielsProjects1.Chatter_Box_Starter.service.BoxService;

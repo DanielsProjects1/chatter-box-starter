@@ -1,6 +1,6 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
-import com.DanielsProjects1.Chatter_Box_Starter.dto.ReactionDTO;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.ReactionDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Comment;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Reaction;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.ReactionType;

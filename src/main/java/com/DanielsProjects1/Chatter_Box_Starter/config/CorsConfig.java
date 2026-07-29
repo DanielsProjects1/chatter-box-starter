@@ -86,6 +86,11 @@ public class CorsConfig {
         );
 
         source.registerCorsConfiguration(
+                "/api/v1/register",
+                dashboardCors
+        );
+
+        source.registerCorsConfiguration(
                 "/api/v1/users/**",
                 dashboardCors
         );

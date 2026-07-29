@@ -1,4 +1,4 @@
-package com.DanielsProjects1.Chatter_Box_Starter.dto;
+package com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs;
 
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Comment;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.CommentStatus;
@@ -17,7 +17,7 @@ public class CommentDTO {
     private String gifProvider;
     private String gifProviderId;
     private String gifTitle;
-    private UserDTO author;
+    private UserResponse author;
     private UUID parentId;
     private Instant createdDate;
     private CommentStatus status;
@@ -35,7 +35,7 @@ public class CommentDTO {
         if (isDeleted || isRemoved) {
             String label = isRemoved ? "[removed]" : "[deleted]";
             dto.body = label;
-            UserDTO hiddenUser = new UserDTO();
+            UserResponse hiddenUser = new UserResponse();
             hiddenUser.setUsername(label);
             hiddenUser.setDisplayName(label);
             dto.author = hiddenUser;
@@ -53,7 +53,7 @@ public class CommentDTO {
             dto.gifProvider = comment.getGifProvider();
             dto.gifProviderId = comment.getGifProviderId();
             dto.gifTitle = comment.getGifTitle();
-            dto.author = UserDTO.from(comment.getAuthor());
+            dto.author = UserResponse.from(comment.getAuthor());
             dto.reactions = reactions;
             dto.permissions = permissions;
         }

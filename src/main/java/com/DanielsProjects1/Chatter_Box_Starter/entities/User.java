@@ -18,7 +18,7 @@ public class User {
     @Id
     private UUID id; // GenerateValue annotation removed since Keycloak provides the ID.
     //Basically this is telling Hibernate "the ID will always be provided externally"
-    @Column(unique = true)
+    @Column(nullable = false, unique = true, length = 50)
     private String username;
 
     private String passHash;

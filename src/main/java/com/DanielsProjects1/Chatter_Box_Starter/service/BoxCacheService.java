@@ -1,7 +1,5 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
-import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxDTO;
-import com.DanielsProjects1.Chatter_Box_Starter.dto.BoxPermissions;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.Box;
 import com.DanielsProjects1.Chatter_Box_Starter.utils.CacheKeys;
 import com.DanielsProjects1.Chatter_Box_Starter.utils.CachedBox;
@@ -14,7 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor

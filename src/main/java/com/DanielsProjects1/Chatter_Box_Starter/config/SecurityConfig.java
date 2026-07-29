@@ -37,6 +37,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/widget/boxes/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/widget/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/dashboard/sites/*/rules").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/register").permitAll()
                         //.requestMatchers(HttpMethod.GET, "/api/v1/widget/gifs/search").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .anyRequest().authenticated()

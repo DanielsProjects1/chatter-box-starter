@@ -1,4 +1,4 @@
-package com.DanielsProjects1.Chatter_Box_Starter.dto;
+package com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs;
 
 import com.DanielsProjects1.Chatter_Box_Starter.entities.SiteMember;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.SiteRole;
