@@ -2027,6 +2027,32 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       : '<div class="cb-empty">No site rules yet.</div>';
   }
 
+  function getCurrentPageUrl() {
+    try {
+      return window.top.location.href;
+    } catch {
+      return window.location.href;
+    }
+  }
+
+  function buildFrontendAuthUrl(path) {
+    const returnTo = getCurrentPageUrl();
+
+    const params = new URLSearchParams({
+      returnTo,
+    });
+
+    return `${APP_URL}${path}?${params.toString()}`;
+  }
+
+  function buildLoginUrl() {
+    return buildFrontendAuthUrl("/login");
+  }
+
+  function buildSignupUrl() {
+    return buildFrontendAuthUrl("/signup");
+  }
+
   async function requireAuth() {
     if (!authState.accessToken) {
       showAuthModal();

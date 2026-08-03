@@ -28,17 +28,33 @@ public class UserService {
         this.userRepo = userRepo;
     }
 
+//    @Transactional
+//    public User syncUser(UUID keycloakId, String email, String username) {
+//        return userRepo.findById(keycloakId)
+//                .orElseGet(() -> {
+//                    User user = new User();
+//                    user.setId(keycloakId);
+//                    user.setEmail(email);
+//                    user.setUsername(username);
+//                    user.setDisplayName(username);
+//                    return userRepo.saveAndFlush(user);
+//                });
+//    }
     @Transactional
     public User syncUser(UUID keycloakId, String email, String username) {
-        return userRepo.findById(keycloakId)
+        User user = userRepo.findById(keycloakId)
                 .orElseGet(() -> {
-                    User user = new User();
-                    user.setId(keycloakId);
-                    user.setEmail(email);
-                    user.setUsername(username);
-                    user.setDisplayName(username);
-                    return userRepo.saveAndFlush(user);
+                    User newUser = new User();
+                    newUser.setId(keycloakId);
+                    return newUser;
                 });
+        user.setEmail(email);
+        user.setUsername(username);
+        if (user.getDisplayName() == null) {
+            user.setDisplayName(username);
+        }
+        user.setActive(true);
+        return userRepo.save(user);
     }
 
     @Transactional(readOnly = true)
