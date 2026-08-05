@@ -2361,24 +2361,33 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   }
 
   function showError(message) {
-    const existing = shadow.getElementById('cb-error');
+  const existing = shadow.getElementById("cb-error");
+  existing?.remove();
 
-    existing?.remove();
+  const errorDiv = document.createElement("div");
 
-    const errorDiv = document.createElement('div');
+  errorDiv.id = "cb-error";
+  errorDiv.className = "cb-error";
+  errorDiv.textContent = message;
 
-    errorDiv.id = 'cb-error';
-    errorDiv.className = 'cb-error';
-    errorDiv.textContent = message;
+  const root = shadow.querySelector(".cb-root");
 
-    shadow
-      .querySelector('.cb-root')
-      .appendChild(errorDiv);
+  if (root) {
+    root.appendChild(errorDiv);
+  } else {
+    const fallbackRoot = document.createElement("div");
 
-    setTimeout(() => {
-      errorDiv.remove();
-    }, 2500);
+    fallbackRoot.className = "cb-root";
+    fallbackRoot.innerHTML = `<style>${getStyles()}</style>`;
+    fallbackRoot.appendChild(errorDiv);
+
+    shadow.appendChild(fallbackRoot);
   }
+
+  setTimeout(() => {
+    errorDiv.remove();
+  }, 5000);
+}
 
   function getStyles() {
     return `
