@@ -16,14 +16,8 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import jakarta.servlet.DispatcherType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.beans.factory.annotation.Value;
-import java.time.Duration;
+
 
 @Configuration
 @EnableWebSecurity
