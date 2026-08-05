@@ -11,6 +11,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -19,6 +20,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import java.time.Duration;
@@ -79,8 +81,8 @@ public class SecurityConfig {
                                 "JSESSIONID"
                         )
                         .logoutSuccessHandler(
-                                new HttpStatusReturningLogoutSuccessHandler(
-                                        HttpStatus.NO_CONTENT
+                                oidcLogoutSuccessHandler(
+                                        clientRegistrationRepository
                                 )
                         )
                 )
@@ -88,22 +90,18 @@ public class SecurityConfig {
         return http.build();
     }
 
-//    @Bean
-//    public JwtDecoder jwtDecoder(
-//            @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
-//            String jwkSetUri
-//    ) {
-//        SimpleClientHttpRequestFactory requestFactory =
-//                new SimpleClientHttpRequestFactory();
-//
-//        requestFactory.setConnectTimeout(Duration.ofSeconds(5));
-//        requestFactory.setReadTimeout(Duration.ofSeconds(15));
-//
-//        RestTemplate restTemplate = new RestTemplate(requestFactory);
-//
-//        return NimbusJwtDecoder
-//                .withJwkSetUri(jwkSetUri)
-//                .restOperations(restTemplate)
-//                .build();
-//    }
+    private LogoutSuccessHandler oidcLogoutSuccessHandler(
+            ClientRegistrationRepository clientRegistrationRepository
+    ) {
+        OidcClientInitiatedLogoutSuccessHandler logoutSuccessHandler =
+                new OidcClientInitiatedLogoutSuccessHandler(
+                        clientRegistrationRepository
+                );
+
+        logoutSuccessHandler.setPostLogoutRedirectUri(
+                "http://localhost:3000"
+        );
+
+        return logoutSuccessHandler;
+    }
 }
