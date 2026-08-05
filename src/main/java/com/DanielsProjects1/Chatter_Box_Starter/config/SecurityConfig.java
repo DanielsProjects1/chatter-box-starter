@@ -11,6 +11,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import jakarta.servlet.DispatcherType;
@@ -30,8 +31,13 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             RateLimitFilter rateLimitFilter,
-            ChatterBoxAuthenticationSuccessHandler successHandler
+            ChatterBoxAuthenticationSuccessHandler successHandler,
+            ClientRegistrationRepository clientRegistrationRepository
     ) throws Exception {
+        var authorizationRequestResolver =
+                new ChatterBoxAuthorizationRequestResolver(
+                        clientRegistrationRepository
+                );
         http
                 .cors(cors -> {})
                 .csrf(csrf -> csrf.disable())
@@ -57,6 +63,11 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(ep ->
+                                ep.authorizationRequestResolver(
+                                        authorizationRequestResolver
+                                )
+                        )
                         .successHandler(successHandler)
                 )
                 .logout(logout -> logout

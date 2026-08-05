@@ -29,6 +29,7 @@ public class AuthFlowController {
                     "/account",
                     "/onboarding"
             );
+    private static final String REGISTRATION_REQUEST_ATTRIBUTE = "CHATTERBOX_REGISTRATION_REQUEST";
     private final String frontendUrl;
 
     public AuthFlowController(
@@ -69,7 +70,6 @@ public class AuthFlowController {
         response.sendRedirect(
                 request.getContextPath()
                         + KEYCLOAK_AUTHORIZATION_PATH
-                        + "?kc_action=register"
         );
     }
 

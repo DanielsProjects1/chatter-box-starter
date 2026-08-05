@@ -41,12 +41,9 @@ public class WidgetController {
             @RequestBody InitBoxRequest request,
             Authentication authentication
     ) {
-        UUID userId = null;
-        if (authentication != null
-                && authentication.isAuthenticated()
-                && !(authentication instanceof AnonymousAuthenticationToken)) {
-            userId = SecurityUtils.getUserId(authentication);
-        }
+        UUID userId = SecurityUtils
+                .findUserId(authentication)
+                .orElse(null);
         System.out.println("INIT AUTH = " + authentication);
         System.out.println("INIT USER ID = " + userId);
         System.out.println(request.getSiteId());
@@ -71,7 +68,9 @@ public class WidgetController {
             @RequestParam(defaultValue = "20") int size,
             Authentication authentication
     ) {
-        UUID userId = authentication != null ? SecurityUtils.getUserId(authentication) : null;
+        UUID userId = SecurityUtils
+                .findUserId(authentication)
+                .orElse(null);
         return ResponseEntity.ok(commentService.getCommentsByBox(boxId, page, size, userId));
     }
 
@@ -82,7 +81,9 @@ public class WidgetController {
             @RequestParam(defaultValue = "20") int size,
             Authentication authentication
     ) {
-        UUID userId = authentication != null ? SecurityUtils.getUserId(authentication) : null;
+        UUID userId = SecurityUtils
+                .findUserId(authentication)
+                .orElse(null);
         return ResponseEntity.ok(commentService.getRepliesByComment(commentId, page, size, userId));
     }
 
