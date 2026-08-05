@@ -1,5 +1,6 @@
 package com.DanielsProjects1.Chatter_Box_Starter.controller;
 
+import com.DanielsProjects1.Chatter_Box_Starter.config.ChatterBoxAuthorizationRequestResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -67,6 +68,11 @@ public class AuthFlowController {
             HttpServletResponse response
     ) throws IOException {
         storeSafeReturnTo(request, returnTo);
+        request.getSession().setAttribute(
+                ChatterBoxAuthorizationRequestResolver
+                        .REGISTRATION_REQUEST_ATTRIBUTE,
+                Boolean.TRUE
+        );
         response.sendRedirect(
                 request.getContextPath()
                         + KEYCLOAK_AUTHORIZATION_PATH

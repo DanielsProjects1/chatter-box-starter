@@ -8,7 +8,7 @@ import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequest
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 
 public class ChatterBoxAuthorizationRequestResolver implements OAuth2AuthorizationRequestResolver {
-    private static final String REGISTRATION_REQUEST_ATTRIBUTE = "CHATTERBOX_REGISTRATION_REQUEST";
+    public static final String REGISTRATION_REQUEST_ATTRIBUTE = "CHATTERBOX_REGISTRATION_REQUEST";
 
     private final DefaultOAuth2AuthorizationRequestResolver delegate;
 
