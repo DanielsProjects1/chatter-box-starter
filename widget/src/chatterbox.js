@@ -1,7 +1,3 @@
-import {
-  renderLoginForm,
-  renderSignupForm
-} from './authForms.js';
 import { renderCommentMenu } from './commentMenu.js';
 import { renderCommentModerationMenu } from './commentModerationMenu.js';
 import { renderBoxModerationMenu } from './boxModerationMenu.js';
@@ -14,33 +10,14 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
   const config = window.ChatterBoxConfig || {};
   const API_URL = config.apiUrl;
-  const KEYCLOAK_BASE_URL = config.keycloakBaseUrl;
-
-  if (!API_URL) {
-    console.error('[ChatterBox] No apiUrl provided in window.ChatterBoxConfig');
-    return;
-  }
-  if (!KEYCLOAK_BASE_URL) {
-    console.error(
-      '[ChatterBox] Missing keycloakBaseUrl in window.ChatterBoxConfig'
-    );
-    return;
-  }
-
-  const KEYCLOAK_TOKEN_URL = `${KEYCLOAK_BASE_URL}/realms/chatterbox/protocol/openid-connect/token`;
-
-  let refreshPromise = null;
-  const repliesByParentId = new Map();
+  const APP_URL = config.appUrl || window.location.origin;
 
   const authState = {
-    accessToken: null,
-    refreshToken: null
+    status: "loading", // loading | authenticated | anonymous
+    user: null
   };
 
-  // Remove tokens created by older widget versions.
-  localStorage.removeItem('chatterbox_token');
-  localStorage.removeItem('chatterbox_refresh_token');
-  localStorage.removeItem('chatterbox_last_active');
+  const repliesByParentId = new Map();
 
   const siteId = config.siteId;
 
@@ -77,42 +54,205 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   let activeReplyCommentId = null;
   const commentById = new Map();
   // Initialize the widget
+
+  async function loadCurrentUser() {
+    try {
+      const response = await fetch(
+        `${API_URL}/api/v1/auth/me`,
+        {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "application/json"
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Authentication check failed: ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      authState.status = data.authenticated
+        ? "authenticated"
+        : "anonymous";
+
+      authState.user = data.authenticated
+        ? data.user
+        : null;
+    } catch (error) {
+      console.error(
+        "[ChatterBox] Failed to load authentication state",
+        error
+      );
+
+      authState.status = "anonymous";
+      authState.user = null;
+    }
+  }
+
   async function init() {
     const pageUrl = window.location.pathname;
-
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      if (authState.accessToken) {
-        const fresh = await ensureFreshToken();
-        if (fresh) {
-          headers.Authorization = `Bearer ${authState.accessToken}`;
-        }
-      }
-      let res = await fetch(`${API_URL}/api/v1/widget/init`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ siteId, pageUrl })
-      });
-      if (res.status === 401) {
-        clearAuthSession();
+      const [authResult, widgetResponse] =
+        await Promise.all([
+          loadCurrentUser(),
+          fetch(`${API_URL}/api/v1/widget/init`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              siteId,
+              pageUrl
+            })
+          })
+        ]);
 
-        res = await fetch(`${API_URL}/api/v1/widget/init`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ siteId, pageUrl })
-        });
+      void authResult;
+
+      if (!widgetResponse.ok) {
+        throw new Error(
+          `Init failed: ${widgetResponse.status}`
+        );
       }
-      if (!res.ok) {
-        throw new Error(`Init failed: ${res.status}`);
-      }
-      const box = await res.json();
+
+      const box = await widgetResponse.json();
+
       render(box);
-    } catch (err) {
-      showError('Failed to initialize comments. Please refresh the page.');
-      console.error('[ChatterBox] Failed to initialize:', err);
+    } catch (error) {
+      showError(
+        "Failed to initialize comments. Please refresh the page."
+      );
+
+      console.error(
+        "[ChatterBox] Failed to initialize:",
+        error
+      );
     }
+  }
+
+  function renderComposer() {
+    if (authState.status === "loading") {
+      return renderComposerSkeleton();
+    }
+    if (authState.status === "anonymous") {
+      return renderAnonymousComposer();
+    }
+    return renderAuthenticatedComposer();
+  }
+
+  function renderComposerSkeleton() {
+    return `
+      <div class="cb-composer-skeleton" aria-label="Loading account">
+        <div class="cb-skeleton-line cb-skeleton-line-short"></div>
+        <div class="cb-skeleton-line"></div>
+        <div class="cb-skeleton-actions"></div>
+      </div>
+    `;
+  }
+
+  function renderAnonymousComposer() {
+    return `
+      <div class="cb-auth-prompt">
+        <div class="cb-auth-prompt-copy">
+          <span class="cb-auth-eyebrow">
+            Join the conversation
+          </span>
+
+          <h3>Share your perspective.</h3>
+
+          <p>
+            Log in or create a ChatterBox account to comment,
+            reply, and react.
+          </p>
+        </div>
+
+        <div class="cb-auth-actions">
+          <button
+            type="button"
+            class="cb-button cb-button-secondary cb-auth-login"
+          >
+            Log in
+          </button>
+
+          <button
+            type="button"
+            class="cb-button cb-button-primary cb-auth-signup"
+          >
+            Sign up
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAuthenticatedComposer() {
+    const user = authState.user;
+
+    const displayName =
+      user?.displayName ||
+      user?.username ||
+      "ChatterBox user";
+
+    const initial = displayName.charAt(0).toUpperCase();
+
+    return `
+      <div class="cb-composer">
+        <div class="cb-composer-user">
+          <div class="cb-current-user-avatar">
+            ${escapeHtml(initial)}
+          </div>
+
+          <div>
+            <span class="cb-commenting-label">
+              Commenting as
+            </span>
+
+            <strong>
+              ${escapeHtml(displayName)}
+            </strong>
+          </div>
+        </div>
+
+        <textarea
+          class="cb-input"
+          id="cb-input"
+          rows="2"
+          placeholder="Join the discussion..."
+        ></textarea>
+
+        <div id="cb-selected-gif-preview"></div>
+
+        <div
+          id="cb-gif-panel"
+          class="cb-gif-panel-inline"
+          style="display:none;"
+        ></div>
+
+        <div class="cb-composer-footer">
+          <button
+            type="button"
+            id="cb-gif-btn"
+            class="cb-gif-btn"
+          >
+            GIF
+          </button>
+
+          <button
+            type="button"
+            class="cb-submit-btn"
+            id="cb-submit-btn"
+          >
+            Comment
+          </button>
+        </div>
+      </div>
+    `;
   }
 
   function render(box) {
@@ -136,7 +276,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           <div class="cb-box-status">
             <strong>This discussion is inactive.</strong>
             <span>Log in as a moderator or site owner to reactivate it.</span>
-            ${!authState.accessToken ? `
+            ${authState.status !== "authenticated" ? `
               <button class="cb-auth-login cb-box-login">
                 Log in
               </button>
@@ -144,22 +284,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           </div>
         ` : ''}
         <div id="cb-comments-panel">
-          <div class="cb-composer">
-            <textarea
-              class="cb-input"
-              id="cb-input"
-              rows="1"
-              placeholder="Join the chatter..."
-            ></textarea>
-            <div id="cb-selected-gif-preview"></div>
-            <div id="cb-gif-panel" class="cb-gif-panel-inline" style="display:none;"></div>
-            <div class="cb-composer-footer">
-              <button type="button" id="cb-gif-btn" class="cb-gif-btn">GIF</button>
-              <button class="cb-submit-btn" id="cb-submit-btn">
-                Comment
-              </button>
-            </div>
-          </div>
+          ${renderComposer()}
           <div class="cb-comments" id="cb-comments">
             <div class="cb-loading">Loading comments...</div>
           </div>
@@ -177,7 +302,9 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     currentBox = box;
     currentBoxId = box.id;
     queueMicrotask(applyBoxStateToComposer);
-    attachComposerListener();
+    if (authState.status === "authenticated") {
+      attachComposerListener();
+    }
     if (!eventsAttached) {
       attachGlobalEventDelegation();
       eventsAttached = true;
@@ -189,65 +316,98 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     try {
       const url = `${API_URL}/api/v1/widget/${boxId}/comments?page=${currentPage}&size=20`;
 
-      let headers = await getOptionalAuthHeaders();
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          Accept: "application/json"
+        }
+      });
 
-      let res = await fetch(url, { headers });
-
-      if (res.status === 401) {
-        clearAuthSession();
-        res = await fetch(url, { headers: {} });
+      if (!response.ok) {
+        throw new Error(
+          `Failed to load comments: ${response.status}`
+        );
       }
 
-      if (!res.ok) {
-        throw new Error(`Failed to load comments: ${res.status}`);
-      }
-
-      const data = await res.json();
+      const data = await response.json();
 
       totalCommentCount = data.totalElements || 0;
 
-      const loadMoreBtn = shadow.getElementById('cb-load-more');
-      loadMoreBtn.style.display = data.last ? 'none' : 'block';
+      const loadMoreButton =
+        shadow.getElementById("cb-load-more");
 
-      allComments = currentPage === 0
-        ? data.content || []
-        : [...allComments, ...(data.content || [])];
+      if (loadMoreButton) {
+        loadMoreButton.style.display =
+          data.last ? "none" : "block";
+      }
 
-      renderComments(allComments, totalCommentCount);
-    } catch (err) {
-      showError('Failed to load comments. Please try again.');
-      console.error('[ChatterBox] Failed to load comments:', err);
+      allComments =
+        currentPage === 0
+          ? data.content || []
+          : [
+              ...allComments,
+              ...(data.content || [])
+            ];
+
+      renderComments(
+        allComments,
+        totalCommentCount
+      );
+    } catch (error) {
+      showError(
+        "Failed to load comments. Please try again."
+      );
+
+      console.error(
+        "[ChatterBox] Failed to load comments:",
+        error
+      );
     }
   }
 
   async function refreshCurrentComments() {
     const pageToRestore = currentPage;
-    const loadedPages = [];
-    let totalCount = 0;
-    let isLastPage = false;
+    const loadedComments = [];
 
-    const headers = await getOptionalAuthHeaders();
-    for (let page = 0; page <= pageToRestore; page++) {
-      const res = await fetch(
-        `${API_URL}/api/v1/widget/${currentBoxId}/comments?page=${page}&size=20`,
-        { headers }
+    let totalCount = 0;
+    let lastPageReached = false;
+
+    for (let page = 0; page <= pageToRestore; page += 1) {
+      const response = await fetch(
+        `${API_URL}/api/v1/widget/${currentBoxId}/comments` +
+          `?page=${page}&size=20`,
+        {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            Accept: "application/json"
+          }
+        }
       );
 
-      if (!res.ok) {
-        throw new Error(`Failed to refresh comments: ${res.status}`);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to refresh comments: ${response.status}`
+        );
       }
 
-      const data = await res.json();
+      const data = await response.json();
 
       totalCount = data.totalElements || 0;
-      isLastPage = data.last;
-      loadedPages.push(...(data.content || []));
+      lastPageReached = Boolean(data.last);
+
+      loadedComments.push(
+        ...(data.content || [])
+      );
     }
+    allComments = loadedComments;
 
-    allComments = loadedPages;
+    const loadMoreButton = shadow.getElementById("cb-load-more");
 
-    const loadMoreBtn = shadow.getElementById('cb-load-more');
-    loadMoreBtn.style.display = isLastPage ? 'none' : 'block';
+    if (loadMoreButton) {
+      loadMoreButton.style.display = lastPageReached ? "none" : "block";
+    }
 
     renderComments(allComments, totalCount);
   }
@@ -275,7 +435,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         <div class="cb-avatar ${deleted ? 'cb-avatar-deleted' : ''} ">${initials}</div>
         <div class="cb-comment-body">
           <div class="cb-comment-meta">
-            <span class="cb-username">${displayName}</span>
+            <span class="cb-username">${escapeHtml(displayName)}</span>
             <span class="cb-timestamp">${formatTime(comment.createdDate)}</span>
           </div>
           <div class="cb-comment-text">${deleted ? deletedLabel(comment) : escapeHtml(comment.body)}</div>
@@ -410,8 +570,10 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     const res = await fetch(
       `${API_URL}/api/v1/widget/${currentBoxId}/comments/${commentId}`,
       {
+        method: "GET",
+        credentials: "include",
         headers: {
-          ...(authState.accessToken ? { Authorization: `Bearer ${authState.accessToken}` } : {})
+          Accept: "application/json"
         }
       }
     );
@@ -566,12 +728,21 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         : 'Join the chatter...';
   }
 
+  function navigateToAuthentication(path) {
+    const returnTo =
+      window.location.pathname +
+      window.location.search +
+      window.location.hash;
+    const url = new URL(path, APP_URL);
+    url.searchParams.set("returnTo", returnTo);
+    window.top.location.assign(url.toString());
+  }
+
   function attachGlobalEventDelegation() {
     shadow.addEventListener('click', async (e) => {
       const boxLoginBtn = e.target.closest('.cb-box-login');
       if (boxLoginBtn) {
-        //showAuthModal();
-        renderLoginForm(shadow);
+        navigateToAuthentication('/login');
         return;
       }
       const loadMoreBtn = e.target.closest('#cb-load-more');
@@ -1438,7 +1609,7 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
           }
 
           if (!res.ok) {
-            shadow.getElementById(optimisticId)?.remove();
+            shadow.getElementById(optimisticReplyId)?.remove();
             showError(`Failed to post comment (${res.status}).`);
             return;
           }
@@ -1526,35 +1697,17 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
         return;
       }
 
-      const loginBtn = e.target.closest('.cb-auth-login');
+      const loginBtn = e.target.closest(".cb-auth-login");
 
       if (loginBtn) {
-        renderLoginForm(shadow);
-        // later: open embedded auth flow
-        console.log('[ChatterBox] Login clicked');
+        navigateToAuthentication("/login");
         return;
       }
 
-      const signupBtn = e.target.closest('.cb-auth-signup');
+      const signupBtn = e.target.closest(".cb-auth-signup");
 
       if (signupBtn) {
-        renderSignupForm(shadow);
-        // later: open embedded signup flow
-        console.log('[ChatterBox] Sign up clicked');
-        return;
-      }
-
-      const loginSubmitBtn = e.target.closest('.cb-auth-primary-login');
-
-      if (loginSubmitBtn) {
-        await handleLogin();
-        return;
-      }
-
-      const signupSubmitBtn = e.target.closest('.cb-auth-primary-signup');
-
-      if (signupSubmitBtn) {
-        await handleSignup();
+        navigateToAuthentication("/signup");
         return;
       }
 
@@ -2053,20 +2206,12 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     return buildFrontendAuthUrl("/signup");
   }
 
-  async function requireAuth() {
-    if (!authState.accessToken) {
-      showAuthModal();
-      return false;
+  function requireAuth() {
+    if (authState.status === "authenticated") {
+      return true;
     }
-
-    const fresh = await ensureFreshToken();
-
-    if (!fresh) {
-      showAuthModal();
-      return false;
-    }
-
-    return true;
+    showAuthModal();
+    return false;
   }
 
   function showAuthModal() {
@@ -2149,70 +2294,20 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
     shadow.querySelector('.cb-root').appendChild(modal);
   }
 
-  async function handleLogin() {
-    const username = shadow.querySelector('#cb-login-username')?.value.trim();
-    const password = shadow.querySelector('#cb-login-password')?.value.trim();
-    if (!username || !password) {
-      showError('Please fill in all fields.');
-      return;
-    }
-
-    try {
-      const body = new URLSearchParams({
-        grant_type: 'password',
-        client_id: 'chatterbox-api',
-        username,
-        password
-      });
-
-      const res = await fetch(
-        KEYCLOAK_TOKEN_URL,
-        {
-          method: 'POST',
-          headers: {
-
-            'Content-Type':
-              'application/x-www-form-urlencoded'
-          },
-          body
-        }
-      );
-
-      if (!res.ok) {
-        showAuthError('Invalid username or password.');
-        return;
-      }
-      const data = await res.json();
-
-      saveAuthSession(data);
-      closeAuthModal();
-      
-      if (!currentBox?.active) {
-        await init();
-      } else {
-        await refreshAfterLogin();
-      }
-      //await refreshCurrentComments();
-    } catch (err) {
-      showAuthError('Please enter your username and password.');
-      console.error(err);
-    }
-  }
-
   async function refreshAfterLogin() {
     await refreshBoxState();
     await refreshCurrentComments();
   }
 
   async function refreshBoxState() {
-    const authHeaders = await getOptionalAuthHeaders();
-    if (!authHeaders.Authorization) {
-      throw new Error("No auth token available for permission refresh.")
-    }
+    const res = await authFetch(
+        `${API_URL}/api/v1/widget/boxes/${currentBoxId}`
+    );
 
-    let res = await authFetch(`${API_URL}/api/v1/widget/boxes/${currentBoxId}`);
     if (!res.ok) {
-      throw new Error(`Failed to refresh box state: ${res.status}`);
+        throw new Error(
+            `Failed to refresh box state: ${res.status}`
+        );
     }
 
     currentBox = await res.json();
@@ -2220,250 +2315,30 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
     refreshBoxModerationUI();
     applyBoxStateToComposer();
-  }
-
-  async function getOptionalAuthHeaders() {
-    if (!authState.accessToken) return {};
-
-    try {
-      const fresh = await ensureFreshToken();
-
-      if (fresh) {
-        return { Authorization: `Bearer ${authState.accessToken}` };
-      }
-    } catch (err) {
-      console.warn('[ChatterBox] Token refresh failed, loading anonymously:', err);
-    }
-
-    clearAuthSession();
-    return {};
-  }
-
-  function saveAuthSession(data) {
-    if (!data?.access_token) {
-      throw new Error('Authentication response did not include an access token.');
-    }
-
-    authState.accessToken = data.access_token;
-
-    // Some providers may omit a replacement refresh token.
-    // Preserve the existing one in that case.
-    if (data.refresh_token) {
-      authState.refreshToken = data.refresh_token;
-    }
-  }
-
-  function clearAuthSession() {
-    authState.accessToken = null;
-    authState.refreshToken = null;
-  }
+}
 
   async function authFetch(url, options = {}) {
-    const hasFreshToken = await ensureFreshToken();
+    const response = await fetch(url, {
+      ...options,
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        ...(options.headers || {})
+      }
+    });
 
-    if (!hasFreshToken) {
-      clearAuthSession();
-      closeAuthModal();
-      return new Response(null, { status: 401 });
-    }
-
-    const request = () =>
-      fetch(url, {
-        ...options,
-        headers: {
-          ...(options.headers || {}),
-          Authorization: `Bearer ${authState.accessToken}`
-        }
-      });
-
-    let res = await request();
-
-    if (res.status !== 401) {
-      return res;
-    }
-
-    const refreshed = await refreshAccessToken();
-
-    if (!refreshed) {
-      clearAuthSession();
-      showAuthModal();
-      return res;
-    }
-
-    res = await request();
-
-    if (res.status === 401) {
-      clearAuthSession();
+    if (response.status === 401) {
+      authState.status = "anonymous";
+      authState.user = null;
       showAuthModal();
     }
 
-    return res
-  }
-
-  async function ensureFreshToken() {
-    if (!authState.accessToken) {
-      return false;
-    }
-
-    if (!shouldRefreshToken(authState.accessToken)) {
-      return true;
-    }
-
-    const refreshed = await refreshAccessToken();
-
-    return refreshed && Boolean(authState.accessToken);
+    return response;
   }
 
   function closeAuthModal() {
     shadow.getElementById('cb-auth-modal')?.remove();
     shadow.querySelector('.cb-auth-backdrop')?.remove();
-  }
-
-  async function refreshAccessToken() {
-    if (refreshPromise) {
-      return refreshPromise;
-    }
-
-    refreshPromise = (async () => {
-      try {
-        const refreshToken = authState.refreshToken;
-
-        if (!refreshToken) {
-          clearAuthSession();
-          return false;
-        }
-
-        const body = new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: 'chatterbox-api',
-          refresh_token: refreshToken
-        });
-
-        const res = await fetch(
-          KEYCLOAK_TOKEN_URL,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/x-www-form-urlencoded'
-            },
-            body
-          }
-        );
-
-        if (!res.ok) {
-          clearAuthSession();
-          return false;
-        }
-
-        const data = await res.json();
-
-        saveAuthSession(data);
-
-        return true;
-      } finally {
-        refreshPromise = null;
-      }
-    })();
-
-    return refreshPromise;
-  }
-
-  function decodeJwtPayload(token) {
-    try {
-      const payload = token.split('.')[1];
-
-      const normalized = payload
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
-
-      const json = decodeURIComponent(
-        atob(normalized)
-          .split('')
-          .map(char =>
-            '%' + ('00' + char.charCodeAt(0).toString(16)).slice(-2)
-          )
-          .join('')
-      );
-
-      return JSON.parse(json);
-    } catch {
-      return null;
-    }
-  }
-
-  function shouldRefreshToken(token) {
-    const payload = decodeJwtPayload(token);
-
-    if (!payload?.exp) return true;
-
-    const expiresAtMs = payload.exp * 1000;
-    const nowMs = Date.now();
-
-    const REFRESH_BUFFER = 1000 * 60 * 2; // refresh if expires in next 2 min
-
-    return expiresAtMs - nowMs < REFRESH_BUFFER;
-  }
-
-  function isTokenExpired(token) {
-    const payload = decodeJwtPayload(token);
-
-    if (!payload?.exp) return true;
-
-    return payload.exp * 1000 <= Date.now();
-  }
-
-  async function handleSignup() {
-    const username = shadow.querySelector('#cb-signup-username')?.value.trim();
-
-    const email = shadow.querySelector('#cb-signup-email')?.value.trim();
-
-    const password = shadow.querySelector('#cb-signup-password')?.value.trim();
-
-    if (!username || !email || !password) {
-      showError('Please fill in all fields.');
-      return;
-    }
-
-    try {
-      await fetch(
-        `${API_URL}/api/v1/auth/register`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            username,
-            email,
-            password
-          })
-        }
-      );
-
-      await handleLogin();
-    } catch (err) {
-      showError('Sign up failed.');
-      console.error(err);
-    }
-  }
-
-  function showAuthError(message) {
-    const error = shadow.getElementById('cb-auth-error');
-
-    if (!error) {
-      showError(message);
-      return;
-    }
-
-    error.textContent = message;
-    error.style.display = 'block';
-
-    clearTimeout(error._timeoutId);
-    error._timeoutId = setTimeout(() => {
-      error.textContent = '';
-      error.style.display = 'none';
-    }, 5000);
   }
 
   function formatTime(isoString) {
@@ -2637,6 +2512,5 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       .cb-comment-gif img, .cb-selected-gif img { width: 100%; height: auto; border-radius: 10px; }
     `;
   }
-
   init();
 })();
