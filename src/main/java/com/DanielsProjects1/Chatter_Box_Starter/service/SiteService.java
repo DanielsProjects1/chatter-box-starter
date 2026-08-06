@@ -1,5 +1,6 @@
 package com.DanielsProjects1.Chatter_Box_Starter.service;
 
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.InstallationStatusDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.entities.*;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteMemberRepository;
 import com.DanielsProjects1.Chatter_Box_Starter.repo.SiteRepository;
@@ -9,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.AccessDeniedException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -139,5 +139,25 @@ public class SiteService {
         site.setDomain(newDomain);
         siteRepo.save(site);
     }
-    
+
+    @Transactional(readOnly = true)
+    public InstallationStatusDTO getInstallationStatus(
+            UUID siteId,
+            UUID userId
+    ) throws AccessDeniedException {
+        SiteMember membership = siteMemberRepo.findByUserIdAndSiteId(userId, siteId)
+                        .orElseThrow(() ->
+                                new AccessDeniedException(
+                                        "You do not have access to this site"
+                                )
+                        );
+
+        if (membership.getRole() != SiteRole.OWNER) {
+            throw new AccessDeniedException(
+                    "Only the site owner can verify installation"
+            );
+        }
+        Site site = membership.getSite();
+        return new InstallationStatusDTO(site.isLoaded());
+    }
 }

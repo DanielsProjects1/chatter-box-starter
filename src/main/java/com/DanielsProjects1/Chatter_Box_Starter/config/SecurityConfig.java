@@ -93,7 +93,11 @@ public class SecurityConfig {
                 );
 
         logoutSuccessHandler.setPostLogoutRedirectUri(
-                "http://localhost:3000"
+                "http://localhost:3000/"
+        );
+
+        logoutSuccessHandler.setDefaultTargetUrl(
+                "http://localhost:3000/"
         );
 
         return logoutSuccessHandler;

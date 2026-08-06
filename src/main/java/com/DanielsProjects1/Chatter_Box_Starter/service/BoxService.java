@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.AccessDeniedException;
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -45,6 +46,7 @@ public class BoxService {
 //        }
         Box box = new Box();
         Site site = siteRepo.findById(siteId).orElseThrow(() -> new RuntimeException("Site not found"));
+        if (!site.isLoaded()) site.setLoaded(true);
         box.setSite(site);
         box.setPageUrl(pageUrl);
         boxRepo.save(box);
@@ -143,4 +145,5 @@ public class BoxService {
         permissions.setCanToggleBoxLock(isOwner || isModerator);
         return permissions;
     }
+
 }

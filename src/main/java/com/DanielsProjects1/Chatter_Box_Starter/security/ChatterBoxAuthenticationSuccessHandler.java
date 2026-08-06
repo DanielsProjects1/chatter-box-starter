@@ -61,8 +61,7 @@ public class ChatterBoxAuthenticationSuccessHandler implements AuthenticationSuc
                     AuthFlowController.getReturnToSessionAttribute()
             );
 
-            if (storedReturnTo instanceof String storedPath
-                    && !storedPath.isBlank()) {
+            if (storedReturnTo instanceof String storedPath && !storedPath.isBlank()) {
                 returnTo = storedPath;
             }
 

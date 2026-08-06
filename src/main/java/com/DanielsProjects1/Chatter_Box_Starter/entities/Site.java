@@ -26,6 +26,9 @@ public class Site {
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
+    @Column(nullable = false)
+    private boolean loaded = false;
+
     @CreatedDate
     private Instant createdAt;
     @LastModifiedDate

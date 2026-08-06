@@ -4,6 +4,7 @@ import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.CreateSiteRule;
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.RegisterSiteRequest;
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.UpdateSiteDomain;
 import com.DanielsProjects1.Chatter_Box_Starter.RequestDTOs.UpdateSiteMemberRole;
+import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.InstallationStatusDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.SiteDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.SiteMemberDTO;
 import com.DanielsProjects1.Chatter_Box_Starter.ResponseDTOs.SiteRuleDTO;
@@ -119,5 +120,15 @@ public class SiteDashboardController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{siteId}/installation")
+    public ResponseEntity<InstallationStatusDTO> getInstallationStatus(
+            @PathVariable UUID siteId,
+            Authentication authentication
+    ) throws AccessDeniedException {
+        UUID userId = SecurityUtils.getUserId(authentication);
+        return ResponseEntity.ok(
+                siteService.getInstallationStatus(siteId, userId)
+        );
+    }
 
 }

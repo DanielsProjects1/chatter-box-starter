@@ -61,7 +61,7 @@ public class AuthFlowController {
     public void register(
             @RequestParam(
                     name = "returnTo",
-                    defaultValue = "/onboarding"
+                    defaultValue = "/dashboard"
             )
             String returnTo,
             HttpServletRequest request,
