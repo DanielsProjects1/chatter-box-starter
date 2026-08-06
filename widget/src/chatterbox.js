@@ -8,9 +8,9 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
   const REACTION_UI = {HEART: '❤️', THUMBS_UP: '👍', THUMBS_DOWN: '👎', LAUGH: '😂', SURPRISED: '😮', SAD: '😢', FIRE: '🔥' };
   const REACTION_ORDER = [ 'THUMBS_UP', 'HEART', 'FIRE', 'LAUGH', 'SURPRISED', 'SAD', 'THUMBS_DOWN' ];
 
-  const config = window.ChatterBoxConfig || {};
-  const API_URL = config.apiUrl;
-  const APP_URL = config.appUrl || window.location.origin;
+  // const config = window.ChatterBoxConfig || {};
+  // const API_URL = config.apiUrl;
+  // const APP_URL = config.appUrl || window.location.origin;
 
   const authState = {
     status: "loading", // loading | authenticated | anonymous
@@ -19,23 +19,87 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
 
   const repliesByParentId = new Map();
 
-  const siteId = config.siteId;
+  // const siteId = config.siteId;
+
+  // if (!siteId) {
+  //   console.error('[ChatterBox] No siteId provided in window.ChatterBoxConfig');
+  //   return;
+  // }
+
+  // const mountId = config.mountId || 'chatterbox-widget';
+  // const host = document.getElementById(mountId);
+
+  // if (!host) {
+  //   console.error(`[ChatterBox] No element found with id "${mountId}"`);
+  //   return;
+  // }
+  const widgetScript = findWidgetScript();
+
+  const config = window.ChatterBoxConfig || {};
+
+  const siteId =
+    config.siteId ||
+    widgetScript?.dataset.siteId;
+
+  const API_URL =
+    config.apiUrl ||
+    widgetScript?.dataset.apiUrl;
+
+  const APP_URL =
+    config.appUrl ||
+    widgetScript?.dataset.appUrl ||
+    "https://chatterbox-web.vercel.app";
+
+  const configuredMountId =
+    config.mountId ||
+    widgetScript?.dataset.mountId ||
+    null;
 
   if (!siteId) {
-    console.error('[ChatterBox] No siteId provided in window.ChatterBoxConfig');
+    console.error(
+      "[ChatterBox] Missing siteId. Add data-site-id to the widget script.",
+    );
     return;
   }
 
-  const mountId = config.mountId || 'chatterbox-widget';
-  const host = document.getElementById(mountId);
+  if (!API_URL) {
+    console.error(
+      "[ChatterBox] Missing apiUrl. Add data-api-url to the widget script.",
+    );
+    return;
+  }
+
+  const host = createOrFindWidgetHost({
+    widgetScript,
+    configuredMountId,
+    siteId,
+  });
 
   if (!host) {
-    console.error(`[ChatterBox] No element found with id "${mountId}"`);
+    console.error(
+      "[ChatterBox] Could not create the widget container.",
+    );
     return;
   }
 
-  // Create shadow DOM for style isolation
-  const shadow = host.attachShadow({ mode: 'open' });
+  /*
+   * Avoid initializing twice if the script is accidentally included
+   * more than once or React development mode remounts the integration.
+   */
+  if (host.dataset.chatterboxInitialized === "true") {
+    console.warn(
+      "[ChatterBox] Widget is already initialized on this element.",
+    );
+    return;
+  }
+
+  host.dataset.chatterboxInitialized = "true";
+
+  const shadow =
+    host.shadowRoot ||
+    host.attachShadow({
+      mode: "open",
+    });
 
   let currentBoxId = null;
   let currentBox = null;
@@ -92,6 +156,92 @@ import { renderBoxModerationMenu } from './boxModerationMenu.js';
       authState.status = "anonymous";
       authState.user = null;
     }
+  }
+
+  function findWidgetScript() {
+    const scripts = Array.from(
+      document.querySelectorAll(
+        "script[data-chatterbox-widget]",
+      ),
+    );
+
+    /*
+    * Prefer the script whose resolved src matches this module.
+    * This supports pages that might contain multiple script tags.
+    */
+    const matchingScript = scripts.find((script) => {
+      try {
+        return new URL(
+          script.src,
+          document.baseURI,
+        ).href === import.meta.url;
+      } catch {
+        return false;
+      }
+    });
+
+    return matchingScript || scripts.at(-1) || null;
+  }
+
+  function createOrFindWidgetHost({
+    widgetScript,
+    configuredMountId,
+    siteId,
+  }) {
+    /*
+    * Advanced installation:
+    * the customer supplied data-mount-id or config.mountId.
+    */
+    if (configuredMountId) {
+      const configuredHost =
+        document.getElementById(configuredMountId);
+
+      if (!configuredHost) {
+        console.error(
+          `[ChatterBox] No element found with id "${configuredMountId}".`,
+        );
+
+        return null;
+      }
+
+      return configuredHost;
+    }
+
+    const generatedHostId =
+      `chatterbox-widget-${siteId}`;
+
+    const existingHost =
+      document.getElementById(generatedHostId);
+
+    if (existingHost) {
+      return existingHost;
+    }
+
+    const host = document.createElement("div");
+
+    host.id = generatedHostId;
+    host.setAttribute(
+      "data-chatterbox-host",
+      "",
+    );
+
+    /*
+    * Put the widget where the script tag was added.
+    * If the script is in a shared footer/layout, the widget appears
+    * there on every page using that layout.
+    */
+    if (widgetScript?.parentNode) {
+      widgetScript.parentNode.insertBefore(
+        host,
+        widgetScript,
+      );
+
+      return host;
+    }
+
+    document.body.appendChild(host);
+
+    return host;
   }
 
   async function init() {
